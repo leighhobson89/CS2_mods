@@ -1,0 +1,15 @@
+# Node (per-mod)
+node_modules/
+
+# .NET build output (per-mod)
+bin/
+obj/
+
+# CS2 modding toolchain IL2CPP/Unity cache (per-mod)
+Library/
+
+# editor / OS cruft
+.vs/
+*.user
+.DS_Store
+Thumbs.db

@@ -1,9 +1,0 @@
-C:\Users\Leigh\Desktop\Development\CS2_mods\MidnightToggle\obj\Debug\net48\MidnightToggle.csproj.AssemblyReference.cache
-C:\Users\Leigh\Desktop\Development\CS2_mods\MidnightToggle\obj\Debug\net48\MidnightToggle.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\Leigh\Desktop\Development\CS2_mods\MidnightToggle\obj\Debug\net48\MidnightToggle.AssemblyInfoInputs.cache
-C:\Users\Leigh\Desktop\Development\CS2_mods\MidnightToggle\obj\Debug\net48\MidnightToggle.AssemblyInfo.cs
-C:\Users\Leigh\Desktop\Development\CS2_mods\MidnightToggle\obj\Debug\net48\MidnightToggle.csproj.CoreCompileInputs.cache
-C:\Users\Leigh\Desktop\Development\CS2_mods\MidnightToggle\bin\Debug\net48\MidnightToggle.dll
-C:\Users\Leigh\Desktop\Development\CS2_mods\MidnightToggle\bin\Debug\net48\MidnightToggle.pdb
-C:\Users\Leigh\Desktop\Development\CS2_mods\MidnightToggle\obj\Debug\net48\MidnightToggle.dll
-C:\Users\Leigh\Desktop\Development\CS2_mods\MidnightToggle\obj\Debug\net48\MidnightToggle.pdb
