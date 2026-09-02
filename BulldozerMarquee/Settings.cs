@@ -13,12 +13,13 @@ namespace BulldozerMarquee
     /// </para>
     /// </summary>
     [FileLocation(nameof(BulldozerMarquee))]
-    [SettingsUIGroupOrder(ConfirmationGroup, FeedbackGroup)]
-    [SettingsUIShowGroupName(ConfirmationGroup, FeedbackGroup)]
+    [SettingsUIGroupOrder(ConfirmationGroup, SelectionGroup, FeedbackGroup)]
+    [SettingsUIShowGroupName(ConfirmationGroup, SelectionGroup, FeedbackGroup)]
     public class Settings : ModSetting
     {
         public const string MainSection = "Main";
         public const string ConfirmationGroup = "Confirmation";
+        public const string SelectionGroup = "Selection";
         public const string FeedbackGroup = "Feedback";
 
         public Settings(IMod mod)
@@ -38,6 +39,19 @@ namespace BulldozerMarquee
         /// panel's Bulldoze button — this property is the single source of truth for
         /// both, so the two can never disagree.
         /// </summary>
+        /// <summary>
+        /// Whether unticking a filter also drops the assets of that type out of a
+        /// selection that has already been made.
+        /// <para>
+        /// On by default: with the option off, the checkboxes describe the next drag
+        /// while the highlighted selection still describes the last one, and the two
+        /// can disagree without anything on screen saying so. Mirrored by the panel's
+        /// "Sync" checkbox.
+        /// </para>
+        /// </summary>
+        [SettingsUISection(MainSection, SelectionGroup)]
+        public bool PruneOnFilterChange { get; set; }
+
         [SettingsUISection(MainSection, FeedbackGroup)]
         public bool PlaySfx { get; set; }
 
@@ -50,16 +64,12 @@ namespace BulldozerMarquee
         [SettingsUIHidden]
         public int SavedFilters { get; set; }
 
-        /// <summary>Last selected <see cref="SelectionMode"/>, persisted for the same reason.</summary>
-        [SettingsUIHidden]
-        public int SavedMode { get; set; }
-
         public override void SetDefaults()
         {
             ConfirmBulldoze = true;
+            PruneOnFilterChange = true;
             PlaySfx = true;
             SavedFilters = (int)AssetFilter.All;
-            SavedMode = (int)SelectionMode.Marquee;
         }
     }
 }

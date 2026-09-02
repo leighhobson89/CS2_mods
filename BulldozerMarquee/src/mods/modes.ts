@@ -29,7 +29,7 @@ export const MODES: readonly ModeDefinition[] = [
     {
         value: 1,
         label: "Freeform",
-        tooltip: "Freeform — not implemented yet",
+        tooltip: "Freeform — draw a lasso to select",
         icon: freeformIcon,
         selectedIcon: freeformSelectedIcon,
     },

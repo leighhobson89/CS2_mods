@@ -26,6 +26,7 @@ namespace BulldozerMarquee
                 { m_Setting.GetSettingsLocaleID(), "Bulldozer Marquee" },
                 { m_Setting.GetOptionTabLocaleID(Settings.MainSection), "Main" },
                 { m_Setting.GetOptionGroupLocaleID(Settings.ConfirmationGroup), "Safety" },
+                { m_Setting.GetOptionGroupLocaleID(Settings.SelectionGroup), "Selection" },
                 { m_Setting.GetOptionGroupLocaleID(Settings.FeedbackGroup), "Feedback" },
 
                 {
@@ -36,6 +37,19 @@ namespace BulldozerMarquee
                     m_Setting.GetOptionDescLocaleID(nameof(Settings.ConfirmBulldoze)),
                     "Ask for confirmation before deleting the selection. " +
                     "This is the same setting as the 'Ask' checkbox on the filter panel."
+                },
+
+                {
+                    m_Setting.GetOptionLabelLocaleID(nameof(Settings.PruneOnFilterChange)),
+                    "Keep the selection in sync with the filters"
+                },
+                {
+                    m_Setting.GetOptionDescLocaleID(nameof(Settings.PruneOnFilterChange)),
+                    "When a filter is unticked, immediately remove everything of that " +
+                    "type from the current selection. With this off, unticking a filter " +
+                    "only affects the next selection you draw and the one already " +
+                    "highlighted is left as it is. " +
+                    "This is the same setting as the 'Sync' checkbox on the filter panel."
                 },
 
                 {

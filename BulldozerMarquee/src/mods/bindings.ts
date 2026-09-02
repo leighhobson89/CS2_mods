@@ -17,10 +17,16 @@ export const selectionCount$ = bindValue<number>(GROUP, "SelectionCount", 0);
 /** Mirrors the mod's "Play bulldoze sound" option in the game settings. */
 export const playSfx$ = bindValue<boolean>(GROUP, "PlaySfx", true);
 
+/** True when the region held more items than the tool will safely act on. */
+export const selectionClamped$ = bindValue<boolean>(GROUP, "SelectionClamped", false);
+
 /** Mirrors the mod's "Confirm before bulldozing" option in the game settings. */
 export const confirmBulldoze$ = bindValue<boolean>(GROUP, "ConfirmBulldoze", true);
 
-/** Selected SelectionMode; persisted between sessions. See modes.ts. */
+/** Mirrors the mod's "Keep the selection in sync with the filters" option. */
+export const pruneOnFilterChange$ = bindValue<boolean>(GROUP, "PruneOnFilterChange", true);
+
+/** Selected SelectionMode. Always starts on Marquee; see modes.ts. */
 export const mode$ = bindValue<number>(GROUP, "Mode", 0);
 
 export const toggle = () => trigger(GROUP, "Toggle");
@@ -30,4 +36,5 @@ export const bulldoze = () => trigger(GROUP, "Bulldoze");
 export const clearSelection = () => trigger(GROUP, "ClearSelection");
 export const toggleSfx = () => trigger(GROUP, "ToggleSfx");
 export const toggleConfirmBulldoze = () => trigger(GROUP, "ToggleConfirmBulldoze");
+export const togglePruneOnFilterChange = () => trigger(GROUP, "TogglePruneOnFilterChange");
 export const setMode = (mode: number) => trigger(GROUP, "SetMode", mode);

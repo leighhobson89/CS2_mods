@@ -39,6 +39,16 @@ namespace BulldozerMarquee
 
         /// <summary>Line and ring thickness, in metres — thin enough to read as a hairline on screen.</summary>
         private const float LineWidth = 1.5f;
+
+        /// <summary>
+        /// The lasso's closing chord, drawn a touch thinner than the drawn trail —
+        /// roughly a pixel at normal zoom, since these widths are world metres rather
+        /// than screen pixels. Together with the dashes it reads as the provisional
+        /// edge it is, rather than as part of what the player drew.
+        /// </summary>
+        private const float ClosingLineWidth = 1f;
+        private const float ClosingDashLength = 5f;
+        private const float ClosingGapLength = 4f;
         private const float MarkerDiameter = 4f;
         private const float MarkerThickness = 0.5f;
 
@@ -64,9 +74,67 @@ namespace BulldozerMarquee
         /// </summary>
         private NativeList<float3> m_SelectionPositions;
 
+        /// <summary>
+        /// The category each selected entity was collected under, indexed alongside
+        /// <see cref="m_Selection"/>.
+        /// <para>
+        /// Recorded at collection time rather than recomputed on demand because the
+        /// category is defined by which query matched, and that knowledge only exists
+        /// here. Re-deriving it later would mean a second copy of the component
+        /// composition rules in <c>OnCreate</c>, which would drift the first time a
+        /// query is amended. Only <see cref="PruneSelection"/> reads it.
+        /// </para>
+        /// </summary>
+        private NativeList<AssetFilter> m_SelectionCategories;
+
+        /// <summary>Metres the cursor must travel before the lasso commits a vertex.</summary>
+        private const float MinVertexDistanceSq = 9f;
+
+        /// <summary>Ignore sub-centimetre jitter so a still mouse triggers no rescan.</summary>
+        private const float CursorEpsilonSq = 0.01f;
+
+        /// <summary>Hard ceiling on lasso complexity, so one very long drag cannot stall the frame.</summary>
+        private const int MaxPathVertices = 512;
+
+        /// <summary>Smallest lasso, in metres, that counts as a deliberate gesture.</summary>
+        private const float MinimumExtent = 1f;
+
+        /// <summary>
+        /// Hard ceiling on a selection.
+        /// <para>
+        /// Without one, a box dragged over a dense district selects tens of thousands
+        /// of trees, and every downstream cost is linear in that: a structural change
+        /// per entity, a delete per entity, and an overlay instance per entity per
+        /// frame. Past a certain size that stops being slow and starts being a native
+        /// crash, so the tool refuses to build a selection it cannot safely act on.
+        /// </para>
+        /// </summary>
+        private const int MaxSelection = 5000;
+
+        /// <summary>
+        /// Ceiling on selection markers drawn per frame.
+        /// <para>
+        /// Each marker is one instance in OverlayRenderSystem's projected-curve buffer,
+        /// which is reallocated and re-uploaded to the GPU whenever the count grows.
+        /// Feeding it a five-figure instance count every frame of a drag is what
+        /// crashed the game natively, with no managed stack to show for it. A thousand
+        /// rings already reads as "lots"; more is noise nobody can count anyway.
+        /// </para>
+        /// </summary>
+        private const int MaxDrawnMarkers = 1000;
+
         private bool m_Dragging;
         private float3 m_DragStart;
         private MarqueeArea m_Area;
+
+        /// <summary>Committed lasso vertices in world space. The cursor closes the loop.</summary>
+        private NativeList<float3> m_Path;
+
+        private float3 m_Cursor;
+
+        /// <summary>Flat (x, z) bounds of the lasso, refreshed with the selection.</summary>
+        private float2 m_PathMin;
+        private float2 m_PathMax;
 
         /// <summary>
         /// Set by the panel's Bulldoze button, acted on in <see cref="OnUpdate"/>.
@@ -81,6 +149,12 @@ namespace BulldozerMarquee
         /// drawn by the overlay.
         /// </summary>
         private bool m_SelectionHighlighted;
+
+        /// <summary>True when the region held more than <see cref="MaxSelection"/> items.</summary>
+        private bool m_SelectionClamped;
+
+        /// <summary>Whether the last selection hit the safety ceiling. Read by the UI.</summary>
+        public bool selectionClamped => m_SelectionClamped;
 
         /// <summary>Which categories a drag may pick up. Owned by the UI system.</summary>
         public AssetFilter filters { get; set; } = AssetFilter.All;
@@ -111,6 +185,8 @@ namespace BulldozerMarquee
 
             m_Selection = new NativeList<Entity>(64, Allocator.Persistent);
             m_SelectionPositions = new NativeList<float3>(64, Allocator.Persistent);
+            m_SelectionCategories = new NativeList<AssetFilter>(64, Allocator.Persistent);
+            m_Path = new NativeList<float3>(MaxPathVertices, Allocator.Persistent);
 
             // Every query excludes Deleted (already on its way out) and Temp (a
             // tool preview, not a real placement). Most also exclude Owner, which
@@ -242,6 +318,7 @@ namespace BulldozerMarquee
             // cursor matters just as much: leaving a bulldozer pointer on the default
             // tool would be a mess.
             m_Dragging = false;
+            m_Path.Clear();
             BulldozeCursor.Reset();
             ClearSelection();
 
@@ -261,25 +338,6 @@ namespace BulldozerMarquee
                 ApplyPendingBulldoze();
             }
 
-            // Freeform is a placeholder: the mode bar selects it and persists it, but
-            // nothing draws or selects yet. Bail before any input handling so it
-            // cannot half-work.
-            if (mode != SelectionMode.Marquee)
-            {
-                if (m_Dragging)
-                {
-                    m_Dragging = false;
-                    BulldozeCursor.Reset();
-                }
-
-                if (cancelAction.WasPressedThisFrame() && m_Selection.Length == 0)
-                {
-                    m_ToolSystem.activeTool = m_DefaultToolSystem;
-                }
-
-                return inputDeps;
-            }
-
             bool hasGround = GetRaycastResult(out Entity _, out RaycastHit hit);
 
             if (cancelAction.WasPressedThisFrame())
@@ -288,8 +346,7 @@ namespace BulldozerMarquee
                 // otherwise hand the game back its default tool.
                 if (m_Dragging)
                 {
-                    m_Dragging = false;
-                    BulldozeCursor.Reset();
+                    EndDrag(commit: false);
                 }
                 else if (m_Selection.Length > 0)
                 {
@@ -304,38 +361,19 @@ namespace BulldozerMarquee
 
             if (applyAction.WasPressedThisFrame() && hasGround)
             {
-                // Starting a new box drops whatever the last one caught, highlights
-                // and all, so the preview below is the only thing on screen.
+                // Starting a new region drops whatever the last one caught, highlights
+                // and all, so the preview is the only thing on screen.
                 ClearSelection();
-
-                m_Dragging = true;
-                m_DragStart = hit.m_HitPosition;
-                m_Area = MarqueeArea.FromDrag(m_DragStart, m_DragStart, GetCameraYaw());
+                BeginDrag(hit.m_HitPosition);
             }
             else if (m_Dragging && hasGround)
             {
-                MarqueeArea area = MarqueeArea.FromDrag(m_DragStart, hit.m_HitPosition, GetCameraYaw());
-
-                // Rescanning every query is the expensive part of this system, so it
-                // only happens when the box has actually changed shape — holding the
-                // mouse still costs nothing.
-                if (!area.Equals(m_Area))
-                {
-                    m_Area = area;
-                    RebuildSelection();
-                }
+                UpdateDrag(hit.m_HitPosition);
             }
 
             if (m_Dragging && applyAction.WasReleasedThisFrame())
             {
-                m_Dragging = false;
-                BulldozeCursor.Reset();
-
-                // The preview is already the right set; releasing only commits it by
-                // making the highlight real.
-                RebuildSelection();
-                SetHighlighted(true);
-                m_SelectionHighlighted = true;
+                EndDrag(commit: true);
             }
 
             // Re-asserted every frame rather than once on mouse-down: the UI layer
@@ -350,6 +388,195 @@ namespace BulldozerMarquee
             DrawOverlays();
 
             return inputDeps;
+        }
+
+        private void BeginDrag(float3 position)
+        {
+            m_Dragging = true;
+            m_DragStart = position;
+            m_Cursor = position;
+
+            if (mode == SelectionMode.Marquee)
+            {
+                m_Area = MarqueeArea.FromDrag(position, position, GetCameraYaw());
+            }
+            else
+            {
+                m_Path.Clear();
+                m_Path.Add(position);
+            }
+        }
+
+        /// <summary>
+        /// Grows the region towards the cursor.
+        /// <para>
+        /// Both regions are held in world space, which is what lets the camera pan or
+        /// rotate mid-drag without distorting them: the shape stays pinned to the
+        /// ground rather than to the screen, and the raycast simply keeps reporting
+        /// wherever the cursor now points.
+        /// </para>
+        /// </summary>
+        private void UpdateDrag(float3 position)
+        {
+            if (mode == SelectionMode.Marquee)
+            {
+                MarqueeArea area = MarqueeArea.FromDrag(m_DragStart, position, GetCameraYaw());
+
+                // Rescanning every query is the expensive part of this system, so it
+                // only happens when the box has actually changed shape — holding the
+                // mouse still costs nothing.
+                if (!area.Equals(m_Area))
+                {
+                    m_Area = area;
+                    RebuildSelection();
+                }
+
+                return;
+            }
+
+            if (math.distancesq(position, m_Cursor) < CursorEpsilonSq)
+            {
+                return;
+            }
+
+            m_Cursor = position;
+
+            // The trail is only committed to a vertex once the cursor has travelled
+            // far enough. Recording every frame would make the polygon enormous, and
+            // the containment test is linear in vertex count for every candidate
+            // entity — this is what keeps a lasso affordable.
+            if (m_Path.Length > 0
+                && m_Path.Length < MaxPathVertices
+                && math.distancesq(position, m_Path[m_Path.Length - 1]) >= MinVertexDistanceSq)
+            {
+                m_Path.Add(position);
+            }
+
+            RebuildSelection();
+        }
+
+        private void EndDrag(bool commit)
+        {
+            m_Dragging = false;
+            BulldozeCursor.Reset();
+
+            if (commit)
+            {
+                // The preview is already the right set; releasing only commits it by
+                // making the highlight real.
+                RebuildSelection();
+
+                Mod.Log.Info(
+                    $"Committed {mode} selection: {m_Selection.Length} entities"
+                    + $"{(m_SelectionClamped ? $" (clamped at {MaxSelection})" : string.Empty)}"
+                    + $", filters={filters}, lassoVertices={m_Path.Length}.");
+
+                SetHighlighted(true);
+                m_SelectionHighlighted = true;
+            }
+            else
+            {
+                m_Selection.Clear();
+                m_SelectionPositions.Clear();
+                m_SelectionCategories.Clear();
+                selectionChanged?.Invoke();
+            }
+
+            // Drops the drawn line: like the marquee, the lasso is a gesture, not a
+            // thing that stays on screen once it has been answered.
+            m_Path.Clear();
+        }
+
+        /// <summary>
+        /// The lasso's vertices are the committed trail plus the cursor, which closes
+        /// the loop back to the start. Exposing it this way avoids rebuilding a list
+        /// every frame just to append one moving point.
+        /// </summary>
+        private int pathVertexCount => m_Path.Length + 1;
+
+        private float3 GetPathVertex(int index)
+        {
+            return index < m_Path.Length ? m_Path[index] : m_Cursor;
+        }
+
+        /// <summary>True when the current region is big enough to mean anything.</summary>
+        private bool HasValidRegion()
+        {
+            if (mode == SelectionMode.Marquee)
+            {
+                return m_Area.isValid;
+            }
+
+            return m_Path.Length >= 2 && math.all(m_PathMax - m_PathMin >= MinimumExtent);
+        }
+
+        private void UpdatePathBounds()
+        {
+            if (m_Path.Length == 0)
+            {
+                m_PathMin = m_PathMax = float2.zero;
+                return;
+            }
+
+            float2 min = new float2(float.MaxValue, float.MaxValue);
+            float2 max = new float2(float.MinValue, float.MinValue);
+
+            for (int i = 0; i < pathVertexCount; i++)
+            {
+                float3 vertex = GetPathVertex(i);
+                float2 flat = new float2(vertex.x, vertex.z);
+
+                min = math.min(min, flat);
+                max = math.max(max, flat);
+            }
+
+            m_PathMin = min;
+            m_PathMax = max;
+        }
+
+        /// <summary>
+        /// Even-odd point-in-polygon on the XZ plane, guarded by the polygon's bounding
+        /// box.
+        /// <para>
+        /// The bounds check is not an optimisation to skip lightly: the ray-crossing
+        /// test is linear in vertex count and runs against every entity in every
+        /// enabled query, so rejecting the overwhelming majority with two comparisons
+        /// is what keeps a per-frame preview viable in a large city.
+        /// </para>
+        /// </summary>
+        private bool PathContains(float3 position)
+        {
+            if (position.x < m_PathMin.x || position.x > m_PathMax.x
+                || position.z < m_PathMin.y || position.z > m_PathMax.y)
+            {
+                return false;
+            }
+
+            int count = pathVertexCount;
+            bool inside = false;
+
+            for (int i = 0, j = count - 1; i < count; j = i++)
+            {
+                float3 a = GetPathVertex(i);
+                float3 b = GetPathVertex(j);
+
+                // Zero-length edges (a vertex just committed at the cursor) fail this
+                // first test and contribute nothing, which is the correct result.
+                if ((a.z > position.z) != (b.z > position.z)
+                    && position.x < (b.x - a.x) * (position.z - a.z) / (b.z - a.z) + a.x)
+                {
+                    inside = !inside;
+                }
+            }
+
+            return inside;
+        }
+
+        private bool RegionContains(float3 position)
+        {
+            return mode == SelectionMode.Marquee
+                ? m_Area.Contains(position)
+                : PathContains(position);
         }
 
         /// <summary>
@@ -380,15 +607,24 @@ namespace BulldozerMarquee
         {
             m_Selection.Clear();
             m_SelectionPositions.Clear();
+            m_SelectionCategories.Clear();
+            m_SelectionClamped = false;
+            m_SelectionHighlighted = false;
 
-            if (m_Area.isValid)
+            // Bounds first: the lasso's containment test consults them per entity.
+            if (mode != SelectionMode.Marquee)
             {
-                if ((filters & AssetFilter.Trees) != 0) CollectObjects(m_TreeQuery);
-                if ((filters & AssetFilter.Props) != 0) CollectObjects(m_PropQuery);
-                if ((filters & AssetFilter.Buildings) != 0) CollectObjects(m_BuildingQuery);
+                UpdatePathBounds();
+            }
+
+            if (HasValidRegion())
+            {
+                if ((filters & AssetFilter.Trees) != 0) CollectObjects(m_TreeQuery, AssetFilter.Trees);
+                if ((filters & AssetFilter.Props) != 0) CollectObjects(m_PropQuery, AssetFilter.Props);
+                if ((filters & AssetFilter.Buildings) != 0) CollectObjects(m_BuildingQuery, AssetFilter.Buildings);
                 if ((filters & AssetFilter.Nodes) != 0) CollectNodes();
-                if ((filters & AssetFilter.Segments) != 0) CollectCurves(m_SegmentQuery);
-                if ((filters & AssetFilter.NetLanes) != 0) CollectCurves(m_NetLaneQuery);
+                if ((filters & AssetFilter.Segments) != 0) CollectCurves(m_SegmentQuery, AssetFilter.Segments);
+                if ((filters & AssetFilter.NetLanes) != 0) CollectCurves(m_NetLaneQuery, AssetFilter.NetLanes);
                 if ((filters & AssetFilter.Surfaces) != 0) CollectSurfaces();
             }
 
@@ -396,7 +632,7 @@ namespace BulldozerMarquee
         }
 
         /// <summary>Objects carry their own position, so the test is the transform.</summary>
-        private void CollectObjects(EntityQuery query)
+        private void CollectObjects(EntityQuery query, AssetFilter category)
         {
             if (query.IsEmptyIgnoreFilter)
             {
@@ -411,7 +647,7 @@ namespace BulldozerMarquee
             {
                 for (int i = 0; i < entities.Length; i++)
                 {
-                    Add(entities[i], transforms[i].m_Position);
+                    Add(entities[i], transforms[i].m_Position, category);
                 }
             }
             finally
@@ -436,7 +672,7 @@ namespace BulldozerMarquee
             {
                 for (int i = 0; i < entities.Length; i++)
                 {
-                    Add(entities[i], nodes[i].m_Position);
+                    Add(entities[i], nodes[i].m_Position, AssetFilter.Nodes);
                 }
             }
             finally
@@ -452,7 +688,7 @@ namespace BulldozerMarquee
         /// than "any part overlaps", which would drag in long roads clipped by a
         /// corner of the box.
         /// </summary>
-        private void CollectCurves(EntityQuery query)
+        private void CollectCurves(EntityQuery query, AssetFilter category)
         {
             if (query.IsEmptyIgnoreFilter)
             {
@@ -467,7 +703,7 @@ namespace BulldozerMarquee
             {
                 for (int i = 0; i < entities.Length; i++)
                 {
-                    Add(entities[i], MathUtils.Position(curves[i].m_Bezier, 0.5f));
+                    Add(entities[i], MathUtils.Position(curves[i].m_Bezier, 0.5f), category);
                 }
             }
             finally
@@ -509,7 +745,7 @@ namespace BulldozerMarquee
                         centroid += nodes[n].m_Position;
                     }
 
-                    Add(entities[i], centroid / nodes.Length);
+                    Add(entities[i], centroid / nodes.Length, AssetFilter.Surfaces);
                 }
             }
             finally
@@ -518,15 +754,22 @@ namespace BulldozerMarquee
             }
         }
 
-        private void Add(Entity entity, float3 position)
+        private void Add(Entity entity, float3 position, AssetFilter category)
         {
-            if (!m_Area.Contains(position))
+            if (m_Selection.Length >= MaxSelection)
+            {
+                m_SelectionClamped = true;
+                return;
+            }
+
+            if (!RegionContains(position))
             {
                 return;
             }
 
             m_Selection.Add(entity);
             m_SelectionPositions.Add(position);
+            m_SelectionCategories.Add(category);
         }
 
         /// <summary>
@@ -583,25 +826,123 @@ namespace BulldozerMarquee
 
             try
             {
-                if (live.Length == 0)
-                {
-                    return;
-                }
-
-                if (highlighted)
-                {
-                    EntityManager.AddComponent<Highlighted>(live);
-                }
-                else
-                {
-                    EntityManager.RemoveComponent<Highlighted>(live);
-                }
-
-                EntityManager.AddComponent<BatchesUpdated>(live);
+                ApplyHighlight(live, highlighted);
             }
             finally
             {
                 live.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// The batch write itself, split out from <see cref="SetHighlighted"/> so
+        /// <see cref="PruneSelection"/> can un-highlight the entities it is dropping
+        /// without touching the ones it is keeping.
+        /// </summary>
+        private void ApplyHighlight(NativeArray<Entity> entities, bool highlighted)
+        {
+            if (entities.Length == 0)
+            {
+                return;
+            }
+
+            if (highlighted)
+            {
+                EntityManager.AddComponent<Highlighted>(entities);
+            }
+            else
+            {
+                EntityManager.RemoveComponent<Highlighted>(entities);
+            }
+
+            EntityManager.AddComponent<BatchesUpdated>(entities);
+        }
+
+        /// <summary>
+        /// Drops every selected entity whose category appears in
+        /// <paramref name="removed"/>, keeping the rest of the selection intact.
+        /// <para>
+        /// This is what makes unticking a filter act on a selection the player has
+        /// already committed, rather than only on the next drag. It is driven from
+        /// the UI system, and only when the "Sync" option is on — with the option off
+        /// the selection is deliberately left alone, so a mask edit cannot silently
+        /// change what the Bulldoze button is about to remove.
+        /// </para>
+        /// <para>
+        /// The compaction is done in place with a read/write cursor rather than by
+        /// rebuilding the lists, because the three lists are index-parallel and any
+        /// path that rewrites one without the others corrupts the mapping. Nothing
+        /// here re-runs the region test: an entity that was in the region a moment
+        /// ago still is, and re-collecting would also resurrect anything the
+        /// <see cref="MaxSelection"/> clamp had cut.
+        /// </para>
+        /// </summary>
+        public void PruneSelection(AssetFilter removed)
+        {
+            if (removed == AssetFilter.None || m_Selection.Length == 0)
+            {
+                return;
+            }
+
+            NativeList<Entity> dropped = new NativeList<Entity>(m_Selection.Length, Allocator.Temp);
+
+            try
+            {
+                int kept = 0;
+
+                for (int i = 0; i < m_Selection.Length; i++)
+                {
+                    if ((m_SelectionCategories[i] & removed) != 0)
+                    {
+                        // Only live entities are worth a structural change; the rest
+                        // are simply forgotten.
+                        if (EntityManager.Exists(m_Selection[i]))
+                        {
+                            dropped.Add(m_Selection[i]);
+                        }
+
+                        continue;
+                    }
+
+                    m_Selection[kept] = m_Selection[i];
+                    m_SelectionPositions[kept] = m_SelectionPositions[i];
+                    m_SelectionCategories[kept] = m_SelectionCategories[i];
+                    kept++;
+                }
+
+                if (kept == m_Selection.Length)
+                {
+                    return;
+                }
+
+                m_Selection.Length = kept;
+                m_SelectionPositions.Length = kept;
+                m_SelectionCategories.Length = kept;
+
+                // Mid-drag the selection is a preview that was never tagged, so there
+                // is nothing to take off — and the next frame rebuilds it anyway.
+                if (m_SelectionHighlighted)
+                {
+                    ApplyHighlight(dropped.AsArray(), false);
+                }
+
+                // Nothing is left to carry the tag, so the flag has to come down with
+                // the selection or the next drag starts believing it is highlighted.
+                if (kept == 0)
+                {
+                    m_SelectionHighlighted = false;
+                }
+
+                // The clamp warning quotes the selection count as the ceiling that was
+                // hit. Once the count has been cut by a filter edit that reading is
+                // just wrong, so the warning goes with it.
+                m_SelectionClamped = false;
+
+                selectionChanged?.Invoke();
+            }
+            finally
+            {
+                dropped.Dispose();
             }
         }
 
@@ -622,6 +963,7 @@ namespace BulldozerMarquee
 
             m_Selection.Clear();
             m_SelectionPositions.Clear();
+            m_SelectionCategories.Clear();
             selectionChanged?.Invoke();
         }
 
@@ -662,22 +1004,40 @@ namespace BulldozerMarquee
             }
 
             NativeArray<Entity> live = GetLiveSelection();
+            NativeHashSet<Entity> seen = new NativeHashSet<Entity>(live.Length, Allocator.Temp);
 
             try
             {
-                if (live.Length > 0)
-                {
-                    EntityCommandBuffer buffer = m_ToolOutputBarrier.CreateCommandBuffer();
+                EntityCommandBuffer buffer = m_ToolOutputBarrier.CreateCommandBuffer();
+                int tagged = 0;
 
-                    for (int i = 0; i < live.Length; i++)
+                for (int i = 0; i < live.Length; i++)
+                {
+                    Entity entity = live[i];
+
+                    // Tagging the same entity twice, or re-tagging one the game has
+                    // already marked, feeds duplicates into CleanUpSystem's
+                    // DestroyEntity call. That is a native-level fault with no managed
+                    // stack, so it is cheaper to filter here than to debug there.
+                    if (!seen.Add(entity) || EntityManager.HasComponent<Deleted>(entity))
                     {
-                        buffer.AddComponent<Deleted>(live[i]);
-                        buffer.AddComponent<BatchesUpdated>(live[i]);
+                        continue;
                     }
+
+                    buffer.AddComponent<Deleted>(entity);
+                    buffer.AddComponent<BatchesUpdated>(entity);
+                    tagged++;
                 }
+
+                Mod.Log.Info($"Bulldoze: {tagged} tagged from a selection of {live.Length}.");
+            }
+            catch (System.Exception exception)
+            {
+                Mod.Log.Error(exception, "Bulldoze failed.");
             }
             finally
             {
+                seen.Dispose();
                 live.Dispose();
             }
 
@@ -685,14 +1045,15 @@ namespace BulldozerMarquee
             m_SelectionHighlighted = false;
             m_Selection.Clear();
             m_SelectionPositions.Clear();
+            m_SelectionCategories.Clear();
             selectionChanged?.Invoke();
         }
 
         private void DrawOverlays()
         {
-            bool drawMarquee = m_Dragging && m_Area.isValid;
+            bool drawRegion = m_Dragging && HasValidRegion();
 
-            if (!drawMarquee && m_SelectionPositions.Length == 0)
+            if (!drawRegion && m_SelectionPositions.Length == 0)
             {
                 return;
             }
@@ -703,28 +1064,37 @@ namespace BulldozerMarquee
             // them from the main thread without completing first is a data race.
             dependencies.Complete();
 
-            if (drawMarquee)
+            if (drawRegion && mode == SelectionMode.Marquee)
             {
                 // Four plain lines, no fill inside the box: the marquee should frame
                 // what is underneath it rather than tint it.
                 for (int i = 0; i < 4; i++)
                 {
-                    Line3.Segment edge = new Line3.Segment(m_Area.GetCorner(i), m_Area.GetCorner(i + 1));
-
-                    buffer.DrawLine(
-                        kMarqueeColor,
-                        kMarqueeColor,
-                        0f,
-                        OverlayRenderSystem.StyleFlags.Projected,
-                        edge,
-                        LineWidth,
-                        default);
+                    DrawRegionEdge(buffer, m_Area.GetCorner(i), m_Area.GetCorner(i + 1));
                 }
+            }
+            else if (drawRegion)
+            {
+                // The trail the cursor has drawn, then the chord from the cursor back
+                // to the start — the same loop the containment test uses, so what is
+                // highlighted is always exactly what is outlined.
+                int count = pathVertexCount;
+
+                for (int i = 0; i < count - 1; i++)
+                {
+                    DrawRegionEdge(buffer, GetPathVertex(i), GetPathVertex(i + 1));
+                }
+
+                // The closing chord is the one edge the player did not draw, so it is
+                // dashed and thinner to distinguish it from their own line.
+                DrawClosingEdge(buffer, GetPathVertex(count - 1), GetPathVertex(0));
             }
 
             // Hollow rings — the fill colour is fully transparent, so the marker
             // outlines each selected item instead of covering it.
-            for (int i = 0; i < m_SelectionPositions.Length; i++)
+            int markers = math.min(m_SelectionPositions.Length, MaxDrawnMarkers);
+
+            for (int i = 0; i < markers; i++)
             {
                 buffer.DrawCircle(
                     kMarkerColor,
@@ -737,8 +1107,38 @@ namespace BulldozerMarquee
             }
         }
 
+        private static void DrawRegionEdge(OverlayRenderSystem.Buffer buffer, float3 from, float3 to)
+        {
+            buffer.DrawLine(
+                kMarqueeColor,
+                kMarqueeColor,
+                0f,
+                OverlayRenderSystem.StyleFlags.Projected,
+                new Line3.Segment(from, to),
+                LineWidth,
+                default);
+        }
+
+        private static void DrawClosingEdge(OverlayRenderSystem.Buffer buffer, float3 from, float3 to)
+        {
+            buffer.DrawDashedLine(
+                kMarqueeColor,
+                kMarqueeColor,
+                0f,
+                OverlayRenderSystem.StyleFlags.Projected,
+                new Line3.Segment(from, to),
+                ClosingLineWidth,
+                ClosingDashLength,
+                ClosingGapLength);
+        }
+
         protected override void OnDestroy()
         {
+            if (m_Path.IsCreated)
+            {
+                m_Path.Dispose();
+            }
+
             if (m_Selection.IsCreated)
             {
                 m_Selection.Dispose();
@@ -747,6 +1147,11 @@ namespace BulldozerMarquee
             if (m_SelectionPositions.IsCreated)
             {
                 m_SelectionPositions.Dispose();
+            }
+
+            if (m_SelectionCategories.IsCreated)
+            {
+                m_SelectionCategories.Dispose();
             }
 
             base.OnDestroy();

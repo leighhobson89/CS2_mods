@@ -30,7 +30,7 @@ $danger: #d9633b;
 
     display: flex;
     flex-direction: column;
-    width: 222rem;
+    width: 290rem;
 
     padding: 9rem;
     border: 1rem solid rgba(255, 255, 255, 0.12);
@@ -212,6 +212,7 @@ $danger: #d9633b;
     align-items: center;
     justify-content: center;
     flex: 1 1 auto;
+    min-width: 96rem;
     padding: 6rem;
     border: 1rem solid rgba(217, 99, 59, 0.5);
     border-radius: 3rem;
@@ -244,7 +245,9 @@ $danger: #d9633b;
     margin-right: 6rem;
 }
 
-// Shared by the "Ask" and "SFX" toggles sitting to the right of Bulldoze.
+// Shared by the "Ask", "Sync" and "SFX" toggles sitting to the right of Bulldoze.
+// These hold their natural width and Bulldoze absorbs the remainder, so the panel
+// width is what has to grow when a toggle is added here.
 .miniToggle {
     display: flex;
     align-items: center;
@@ -295,6 +298,17 @@ $danger: #d9633b;
     }
 }
 
+.warning {
+    margin-top: 6rem;
+    padding: 5rem 6rem;
+    border: 1rem solid rgba(217, 99, 59, 0.5);
+    border-radius: 3rem;
+    background-color: rgba(217, 99, 59, 0.18);
+    font-size: 11rem;
+    line-height: 14rem;
+    color: $text;
+}
+
 .hint {
     margin-top: 6rem;
     font-size: 11rem;
@@ -327,7 +341,7 @@ $danger: #d9633b;
 .confirmDialog {
     display: flex;
     flex-direction: column;
-    width: 330rem;
+    width: 380rem;
 
     padding: 22rem;
     border: 1rem solid rgba(255, 255, 255, 0.16);
@@ -347,6 +361,13 @@ $danger: #d9633b;
     font-size: 14rem;
     line-height: 19rem;
     color: $text-dim;
+
+    // Wrap between words only. Belt to the single-string fix in the markup: if a
+    // future edit reintroduces multiple text children, this at least stops words
+    // being broken apart.
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: normal;
 }
 
 .confirmActions {

@@ -10,11 +10,14 @@ import {
     filters$,
     mode$,
     playSfx$,
+    pruneOnFilterChange$,
+    selectionClamped$,
     selectionCount$,
     setAllFilters,
     setMode,
     toggleConfirmBulldoze,
     toggleFilter,
+    togglePruneOnFilterChange,
     toggleSfx,
 } from "./bindings";
 import { ALL_FILTERS, FILTERS } from "./filters";
@@ -42,7 +45,9 @@ export const BulldozerMarqueePanel = () => {
     const selectionCount = useValue(selectionCount$);
     const playSfx = useValue(playSfx$);
     const confirmBeforeBulldoze = useValue(confirmBulldoze$);
+    const pruneOnFilterChange = useValue(pruneOnFilterChange$);
     const mode = useValue(mode$);
+    const selectionClamped = useValue(selectionClamped$);
 
     // Displacement from the resting position in the stylesheet. Closing the panel
     // renders null but does not unmount this component, so a position the player
@@ -180,7 +185,7 @@ export const BulldozerMarqueePanel = () => {
         <>
             {/*
                 A drag needs mouse events from the whole screen, because the cursor
-                outruns a 172rem panel instantly. Listening on `window` does not work
+                outruns the panel instantly. Listening on `window` does not work
                 here: the surrounding HUD is pointer-events:none, so once the cursor
                 leaves the panel the UI layer stops receiving mouse events entirely —
                 they go to the game. This shield is a real pointer-events:auto surface
@@ -304,6 +309,23 @@ export const BulldozerMarqueePanel = () => {
                             </Button>
                         </Tooltip>
 
+                        <Tooltip tooltip="Keep the selection in sync with the filters: unticking a filter drops everything of that type out of the current selection straight away. Same setting as Options > Mods > Bulldozer Marquee.">
+                            <Button
+                                theme={{ button: styles.miniToggle }}
+                                selected={pruneOnFilterChange}
+                                onSelect={togglePruneOnFilterChange}
+                            >
+                                <span
+                                    className={
+                                        pruneOnFilterChange
+                                            ? `${styles.box} ${styles.boxChecked}`
+                                            : styles.box
+                                    }
+                                />
+                                <span className={styles.miniLabel}>Sync</span>
+                            </Button>
+                        </Tooltip>
+
                         <Tooltip tooltip="Play a sound when bulldozing. Same setting as Options > Mods > Bulldozer Marquee.">
                             <Button
                                 theme={{ button: styles.miniToggle }}
@@ -322,6 +344,12 @@ export const BulldozerMarqueePanel = () => {
                         </Tooltip>
                     </div>
 
+                    {selectionClamped && (
+                        <div className={styles.warning}>
+                            {`Limit reached — only the first ${selectionCount} are selected. Draw a smaller area.`}
+                        </div>
+                    )}
+
                     {hasSelection ? (
                         <div className={styles.status}>
                             <span>{selectionCount} selected</span>
@@ -336,7 +364,7 @@ export const BulldozerMarqueePanel = () => {
                         <div className={styles.hint}>
                             {mode === MARQUEE_MODE
                                 ? "Drag a box over the map to select."
-                                : "Freeform mode is not implemented yet."}
+                                : "Draw a loop around what you want to select."}
                         </div>
                     )}
                 </div>
@@ -352,9 +380,15 @@ export const BulldozerMarqueePanel = () => {
                 <div className={styles.confirmScrim}>
                     <div className={styles.confirmDialog}>
                         <div className={styles.confirmTitle}>Bulldoze selection?</div>
+                        {/*
+                            One interpolated string, not interleaved expressions and
+                            literals. Written the obvious way — `{count} item{s} will
+                            be...` — JSX emits four separate text children, and cohtml
+                            lays each out as its own line, so the prompt broke across
+                            four lines and split "item" from "s" mid-word.
+                        */}
                         <div className={styles.confirmBody}>
-                            {selectionCount} item{selectionCount === 1 ? "" : "s"} will
-                            be permanently removed.
+                            {`${selectionCount} ${selectionCount === 1 ? "item" : "items"} will be permanently removed.`}
                         </div>
                         <div className={styles.confirmActions}>
                             <Button

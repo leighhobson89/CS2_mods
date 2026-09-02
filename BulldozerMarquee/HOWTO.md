@@ -156,6 +156,34 @@ its own, and the real highlight is applied exactly once on release —
 The rescan is skipped on frames where the box has not changed shape, which is why
 `MarqueeArea` implements `IEquatable`. Holding the mouse still costs nothing.
 
+## Selection size is a hard safety limit, not a preference
+
+`MaxSelection` (5000) and `MaxDrawnMarkers` (1000) exist because exceeding them
+crashed the game to desktop with a native fault and an empty managed stacktrace.
+
+The cause was the overlay. `DrawOverlays` drew one ring **per selected entity, per
+frame**, and each ring is one instance in `OverlayRenderSystem`'s projected-curve
+buffer. That buffer is reallocated and re-uploaded to the GPU whenever the
+instance count grows (`GetCurveBuffer` → `ComputeBuffer.SetData`). A marquee over a
+dense district selects tens of thousands of trees, so the game was rebuilding a
+five-figure-instance GPU buffer every frame of the drag. That is why the crash
+reproduced both mid-drag while panning *and* on the Bulldoze click — the drawing
+is live in both, and neither had a managed frame to report.
+
+Two lessons worth keeping:
+
+- **An empty managed stacktrace means the fault is native**, so look at what the
+  mod hands to native code — GPU buffers, native containers, `EntityManager` batch
+  operations — not at the C# control flow.
+- **Anything linear in selection size needs a ceiling.** Structural changes,
+  deletes and overlay instances are all per-entity, and a region tool can select
+  an unbounded number of entities. The cap is the fix; the marker limit alone
+  would only have moved the crash to the delete.
+
+`ApplyPendingBulldoze` also deduplicates and skips entities already tagged
+`Deleted`. Duplicates reach `CleanUpSystem`'s `EntityManager.DestroyEntity` call,
+which is another native-level fault with nothing to debug from.
+
 ## The highlight gotcha
 
 Adding or removing `Game.Tools.Highlighted` does nothing visually unless
@@ -250,12 +278,16 @@ state is recalculated and will otherwise overwrite a one-shot call.
 
 ## Persisted panel state, and a defaults trap
 
-The filter mask and the selected mode live in the settings file as
-`SettingsUIHidden` properties. They are panel state rather than options — nobody
-wants to edit a bitmask in a menu — but the settings file is the mod's only
-durable store, and hiding them keeps the options page honest. `ApplyFilters` and
-`SetMode` are the single write paths: binding, tool and settings move together, so
-what the player sees, what the tool uses and what gets saved cannot drift apart.
+The filter mask lives in the settings file as a `SettingsUIHidden` property. It
+is panel state rather than an option — nobody wants to edit a bitmask in a menu —
+but the settings file is the mod's only durable store, and hiding it keeps the
+options page honest. `ApplyFilters` is the single write path: binding, tool and
+settings move together, so what the player sees, what the tool uses and what gets
+saved cannot drift apart.
+
+The selection mode is deliberately *not* persisted. Marquee is what the tool is
+built around, so every session opens on it rather than on whatever the last one
+happened to end with.
 
 **`SetDefaults()` must be called before `LoadSettings`.** Without it, a property
 added since the settings file was last written gets C#'s zero value rather than
@@ -267,15 +299,69 @@ option added from here on hits the same trap.
 ## Modes
 
 The mode bar is `SelectionMode` on the C# side and `MODES` in `src/mods/modes.ts`.
-Because the value is *persisted*, not merely sent over the wire, the numbering is
-a stored contract: renumbering silently changes what a returning player's saved
-mode means. Append, never reorder.
+The numbering is the wire format for the `SetMode` trigger, so the two files have
+to be edited together. `SetMode` always seeds `Marquee` on create; there is no
+saved mode to restore.
 
-`Freeform` is a placeholder. The tool returns early on any mode that is not
-`Marquee`, before any input handling, so it cannot half-work — no drag, no
-preview, no selection — and the panel says so rather than looking broken.
 Switching mode clears the selection, since carrying one across would leave the
 player holding a selection they can no longer see how they made.
+
+### Freeform (lasso)
+
+The cursor's trail is recorded as world-space vertices in `m_Path`, and the
+current cursor closes the loop back to the start — so the polygon is always
+`m_Path + cursor`, and `GetPathVertex` exposes it that way rather than rebuilding
+a list every frame just to append one moving point. `PathContains` is an even-odd
+ray crossing on the XZ plane, and the same vertex loop feeds the drawing, so what
+is outlined is by construction exactly what is highlighted.
+
+Two limits keep it affordable, and neither is cosmetic. A vertex is only committed
+once the cursor has travelled `MinVertexDistanceSq`, because the containment test
+is **linear in vertex count and runs against every entity in every enabled query,
+every frame** — recording a vertex per frame would make a long lasso quadratic.
+`MaxPathVertices` is the hard ceiling on that. The bounding-box check at the top of
+`PathContains` does most of the real work: it rejects the overwhelming majority of
+entities in two comparisons, and without it a per-frame preview would not be
+viable in a large city.
+
+### Panning mid-drag
+
+Both regions are stored in world space, so the camera is free to pan or rotate
+while the button is held: the shape stays pinned to the ground, and the raycast
+just keeps reporting wherever the cursor now points. Nothing special was needed
+to support this — it falls out of the world-space decision, and is the third time
+that choice has paid for itself.
+
+## Keeping the selection in sync with the filters
+
+Unticking a filter after a selection has been committed leaves the checkboxes
+describing the *next* drag while the green rings still describe the *last* one,
+with nothing on screen admitting the two disagree. `Settings.PruneOnFilterChange`
+(on by default, mirrored by the panel's "Sync" checkbox) closes that gap:
+`ApplyFilters` diffs the old mask against the new, and any bit that was just
+switched off goes to `BulldozerMarqueeToolSystem.PruneSelection`.
+
+Because it hangs off `ApplyFilters` rather than off the individual checkbox, the
+"All / None" button is covered by the same code path.
+
+Pruning is *asymmetric on purpose*. Ticking a filter back on does nothing: those
+entities were never run through the region test for this selection, so there is
+nothing to restore without re-running the drag.
+
+`PruneSelection` needs to know which category each selected entity was collected
+under, and that is only knowable at collection time — it is defined by which query
+matched. Rather than re-derive it from component composition (a second copy of the
+`OnCreate` query rules, guaranteed to drift), the category is recorded into
+`m_SelectionCategories`, a third list index-parallel to `m_Selection` and
+`m_SelectionPositions`. **Every site that clears one of those three must clear all
+three**, or the index mapping corrupts and pruning drops the wrong entities.
+
+The compaction is done in place with a read/write cursor for the same reason.
+Only the dropped entities have `Highlighted` taken off them — hence `ApplyHighlight`
+being split out of `SetHighlighted` — and only when the selection was actually
+tagged, which it is not mid-drag. The clamp warning is cleared too: it quotes the
+selection count as the ceiling that was hit, and once a filter edit has cut that
+count the message is simply wrong.
 
 ## The confirmation prompt
 
@@ -296,6 +382,18 @@ prompt really is modal over the whole game rather than just over the panel.
 State that lives in React needs clearing when the tool is switched off, because
 hiding the panel renders `null` without unmounting it: an unanswered prompt would
 otherwise still be open the next time the panel appears.
+
+**Interpolate text into one string; do not interleave expressions and literals.**
+Written the natural JSX way:
+
+```tsx
+{selectionCount} item{selectionCount === 1 ? "" : "s"} will be permanently removed.
+```
+
+that is four separate text children, and cohtml lays each out as its own line —
+the prompt broke across four lines and split `item` from `s` mid-word. A single
+template literal is one text node and wraps normally. Widening the dialog treats
+the symptom; the child count is the cause.
 
 `Reset()` is called on release, on cancel, and in `OnStopRunning` — leaving a
 bulldozer cursor behind on the default tool would be worse than never setting it.

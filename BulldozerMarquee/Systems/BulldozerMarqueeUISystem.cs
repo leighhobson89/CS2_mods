@@ -28,7 +28,9 @@ namespace BulldozerMarquee
         private ValueBinding<int> m_SelectionCount;
         private ValueBinding<bool> m_PlaySfx;
         private ValueBinding<bool> m_ConfirmBulldoze;
+        private ValueBinding<bool> m_PruneOnFilterChange;
         private ValueBinding<int> m_Mode;
+        private ValueBinding<bool> m_SelectionClamped;
 
         protected override void OnCreate()
         {
@@ -44,18 +46,23 @@ namespace BulldozerMarquee
                 ? (AssetFilter)Mod.Settings.SavedFilters & AssetFilter.All
                 : AssetFilter.All;
 
-            SelectionMode savedMode = Mod.Settings != null
-                ? (SelectionMode)Mod.Settings.SavedMode
-                : SelectionMode.Marquee;
+            // Deliberately not persisted. Marquee is the mode the tool is built
+            // around and the one a player is most likely to want first, so a session
+            // that happened to end in Freeform should not decide how the next one
+            // opens.
+            const SelectionMode startingMode = SelectionMode.Marquee;
 
             // C# -> React.
             AddBinding(m_Enabled = new ValueBinding<bool>(Group, "Enabled", false));
             AddBinding(m_Filters = new ValueBinding<int>(Group, "Filters", (int)savedFilters));
-            AddBinding(m_Mode = new ValueBinding<int>(Group, "Mode", (int)savedMode));
+            AddBinding(m_Mode = new ValueBinding<int>(Group, "Mode", (int)startingMode));
             AddBinding(m_SelectionCount = new ValueBinding<int>(Group, "SelectionCount", 0));
+            AddBinding(m_SelectionClamped = new ValueBinding<bool>(Group, "SelectionClamped", false));
             AddBinding(m_PlaySfx = new ValueBinding<bool>(Group, "PlaySfx", PlaySfxSetting));
             AddBinding(m_ConfirmBulldoze =
                 new ValueBinding<bool>(Group, "ConfirmBulldoze", ConfirmBulldozeSetting));
+            AddBinding(m_PruneOnFilterChange =
+                new ValueBinding<bool>(Group, "PruneOnFilterChange", PruneOnFilterChangeSetting));
 
             // React -> C#.
             AddBinding(new TriggerBinding(Group, "Toggle", Toggle));
@@ -65,10 +72,12 @@ namespace BulldozerMarquee
             AddBinding(new TriggerBinding(Group, "ClearSelection", ClearSelection));
             AddBinding(new TriggerBinding(Group, "ToggleSfx", ToggleSfx));
             AddBinding(new TriggerBinding(Group, "ToggleConfirmBulldoze", ToggleConfirmBulldoze));
+            AddBinding(new TriggerBinding(
+                Group, "TogglePruneOnFilterChange", TogglePruneOnFilterChange));
             AddBinding(new TriggerBinding<int>(Group, "SetMode", SetMode));
 
             m_Tool.filters = savedFilters;
-            m_Tool.mode = savedMode;
+            m_Tool.mode = startingMode;
             m_Tool.selectionChanged += OnSelectionChanged;
             m_ToolSystem.EventToolChanged += OnToolChanged;
         }
@@ -119,8 +128,19 @@ namespace BulldozerMarquee
         /// </summary>
         private void ApplyFilters(AssetFilter filters)
         {
+            // Computed before the binding moves, since the old mask is the only
+            // record of which categories were just switched off. Turning a filter
+            // back on is not symmetrical and deliberately does nothing: the entities
+            // it would re-add were never in the region test for this selection.
+            AssetFilter removed = (AssetFilter)m_Filters.value & ~filters;
+
             m_Filters.Update((int)filters);
             m_Tool.filters = filters;
+
+            if (removed != AssetFilter.None && PruneOnFilterChangeSetting)
+            {
+                m_Tool.PruneSelection(removed);
+            }
 
             if (Mod.Settings != null)
             {
@@ -149,12 +169,6 @@ namespace BulldozerMarquee
 
             m_Mode.Update((int)selected);
             m_Tool.mode = selected;
-
-            if (Mod.Settings != null)
-            {
-                Mod.Settings.SavedMode = (int)selected;
-                Mod.Settings.ApplyAndSave();
-            }
         }
 
         /// <summary>
@@ -169,6 +183,14 @@ namespace BulldozerMarquee
         /// prompt is a far better failure than an unexpected deletion.
         /// </summary>
         private static bool ConfirmBulldozeSetting => Mod.Settings == null || Mod.Settings.ConfirmBulldoze;
+
+        /// <summary>
+        /// Defaults to true for the same reason as the confirmation prompt: if the
+        /// setting cannot be read, the safe reading is the one where the highlighted
+        /// selection and the ticked filters agree.
+        /// </summary>
+        private static bool PruneOnFilterChangeSetting =>
+            Mod.Settings == null || Mod.Settings.PruneOnFilterChange;
 
         private void Bulldoze()
         {
@@ -213,6 +235,18 @@ namespace BulldozerMarquee
             m_ConfirmBulldoze.Update(Mod.Settings.ConfirmBulldoze);
         }
 
+        private void TogglePruneOnFilterChange()
+        {
+            if (Mod.Settings == null)
+            {
+                return;
+            }
+
+            Mod.Settings.PruneOnFilterChange = !Mod.Settings.PruneOnFilterChange;
+            Mod.Settings.ApplyAndSave();
+            m_PruneOnFilterChange.Update(Mod.Settings.PruneOnFilterChange);
+        }
+
         /// <summary>
         /// Picks up changes made on the options page, which has no way to notify the
         /// panel directly. A couple of bool comparisons per frame is cheaper than
@@ -231,11 +265,20 @@ namespace BulldozerMarquee
             {
                 m_ConfirmBulldoze.Update(ConfirmBulldozeSetting);
             }
+
+            if (m_PruneOnFilterChange.value != PruneOnFilterChangeSetting)
+            {
+                m_PruneOnFilterChange.Update(PruneOnFilterChangeSetting);
+            }
         }
 
         private void ClearSelection() => m_Tool.ClearSelection();
 
-        private void OnSelectionChanged() => m_SelectionCount.Update(m_Tool.selectionCount);
+        private void OnSelectionChanged()
+        {
+            m_SelectionCount.Update(m_Tool.selectionCount);
+            m_SelectionClamped.Update(m_Tool.selectionClamped);
+        }
 
         protected override void OnDestroy()
         {
