@@ -1,0 +1,116 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>BulldozerMarquee</AssemblyName>
+    <RootNamespace>BulldozerMarquee</RootNamespace>
+    <LangVersion>9.0</LangVersion>
+  </PropertyGroup>
+
+  <Import Project="$(CSII_TOOLPATH)\Mod.props" />
+
+  <ItemGroup>
+    <Reference Include="Game">
+      <HintPath>$(ManagedPath)\Game.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Colossal.Core">
+      <HintPath>$(ManagedPath)\Colossal.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Colossal.Logging">
+      <HintPath>$(ManagedPath)\Colossal.Logging.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Colossal.UI.Binding">
+      <HintPath>$(ManagedPath)\Colossal.UI.Binding.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Unity.Entities">
+      <HintPath>$(ManagedPath)\Unity.Entities.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Unity.Collections">
+        <HintPath>$(ManagedPath)\Unity.Collections.dll</HintPath>
+        <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Unity.Mathematics">
+        <HintPath>$(ManagedPath)\Unity.Mathematics.dll</HintPath>
+        <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Colossal.Mathematics">
+        <HintPath>$(ManagedPath)\Colossal.Mathematics.dll</HintPath>
+        <Private>false</Private>
+    </Reference>
+
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ManagedPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>$(ManagedPath)\UnityEngine.AudioModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="UnityEngine.UnityWebRequestModule">
+      <HintPath>$(ManagedPath)\UnityEngine.UnityWebRequestModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="UnityEngine.UnityWebRequestAudioModule">
+      <HintPath>$(ManagedPath)\UnityEngine.UnityWebRequestAudioModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Colossal.IO.AssetDatabase">
+      <HintPath>$(ManagedPath)\Colossal.IO.AssetDatabase.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Colossal.Localization">
+      <HintPath>$(ManagedPath)\Colossal.Localization.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!--
+      Not used directly, but UICursorCollection.SetCursor is overloaded on
+      cohtml.Net's Cursors enum, so the compiler needs the assembly present to
+      resolve the string overload at all.
+    -->
+    <Reference Include="cohtml.Net">
+      <HintPath>$(ManagedPath)\cohtml.Net.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!--
+    Ships sfx/ into the deployed mod folder so BulldozeAudio can find the clip at
+    runtime; the source tree does not exist on a player's machine.
+
+    This has to run AfterTargets="DeployWIP" because that target does a RemoveDir
+    on the whole deploy folder before copying the build output - anything written
+    earlier is wiped. (Same reason `npm run build` must come after `dotnet build`,
+    not before.) Mod.targets documents this pattern in a comment but does not
+    define the target itself.
+  -->
+  <Target Name="DeploySfx"
+          AfterTargets="DeployWIP"
+          Condition="'$(NeedBuild)' != '' And Exists('$(MSBuildProjectDirectory)\sfx')">
+    <ItemGroup>
+      <SfxToDeploy Include="sfx\**\*.mp3;sfx\**\*.ogg;sfx\**\*.wav" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SfxToDeploy)" DestinationFolder="$(DeployDir)\sfx\%(RecursiveDir)" />
+    <Message Text="Deployed sound effects to $(DeployDir)\sfx" Importance="high" />
+  </Target>
+
+  <Import Project="$(CSII_TOOLPATH)\Mod.targets" />
+
+</Project>

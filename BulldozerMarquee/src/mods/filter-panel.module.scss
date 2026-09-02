@@ -1,0 +1,386 @@
+// CS2 scales its whole UI by the root font size, so vanilla styling is written
+// in rem (1rem is one pixel at the reference resolution). Using px here would
+// leave the panel the wrong size on every UI scale but the default.
+
+$text: #dbe3e9;
+$text-dim: #8b9aa6;
+$accent: #4ba7d8;
+$accent-bright: #7fc9ef;
+$danger: #d9633b;
+
+.panel {
+    // The Game host is the full-screen container, so unlike the toolbar icon this
+    // has to place itself. There is no GameBottomLeft mount point to append to.
+    // This is only the resting position — dragging the header applies a transform
+    // on top of it.
+    position: absolute;
+    left: 12rem;
+    bottom: 92rem;
+
+    // Mandatory. The Game host is a full-screen HUD layer with pointer-events
+    // none so the mouse reaches the 3D world; vanilla widgets opt back in via
+    // their own classes, and passing `theme` to a cs2/ui Button REPLACES that
+    // class. Without this the whole panel is click-through: every press lands on
+    // the tool underneath as a zero-extent drag, which clears the selection and
+    // makes the buttons look dead.
+    pointer-events: auto;
+
+    // Below .dragShield, which has to receive the move events while dragging.
+    z-index: 10;
+
+    display: flex;
+    flex-direction: column;
+    width: 222rem;
+
+    padding: 9rem;
+    border: 1rem solid rgba(255, 255, 255, 0.12);
+    border-radius: 4rem;
+    background-color: rgba(9, 15, 20, 0.93);
+    color: $text;
+    font-size: 13rem;
+}
+
+// Mode selector, above the title. Shares the header's drag behaviour, so the
+// whole top of the panel is a handle except for the buttons themselves.
+.modeBar {
+    display: flex;
+    align-items: center;
+    margin-bottom: 7rem;
+    padding-bottom: 7rem;
+    border-bottom: 1rem solid rgba(255, 255, 255, 0.1);
+    cursor: move;
+    user-select: none;
+}
+
+.modeButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 5rem;
+    padding: 4rem;
+    border: 1rem solid rgba(255, 255, 255, 0.12);
+    border-radius: 3rem;
+    background-color: rgba(255, 255, 255, 0.04);
+
+    &:hover {
+        border-color: rgba(255, 255, 255, 0.24);
+        background-color: rgba(255, 255, 255, 0.09);
+    }
+}
+
+.modeButtonActive {
+    border-color: $accent-bright;
+    background-color: rgba(75, 167, 216, 0.25);
+
+    &:hover {
+        background-color: rgba(75, 167, 216, 0.34);
+    }
+}
+
+.modeIcon {
+    width: 22rem;
+    height: 22rem;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 7rem;
+    padding-bottom: 6rem;
+    border-bottom: 1rem solid rgba(255, 255, 255, 0.1);
+
+    // The whole bar is the drag handle.
+    cursor: move;
+    user-select: none;
+}
+
+.title {
+    font-size: 13rem;
+    font-weight: 600;
+    letter-spacing: 0.5rem;
+    text-transform: uppercase;
+    color: $text-dim;
+}
+
+// Replaces the vanilla button class rather than sitting alongside it, so the
+// component keeps its click sounds and gamepad focus without also bringing the
+// padding and background of a full-size button.
+.allButton {
+    padding: 1rem 4rem;
+    border: 0;
+    border-radius: 2rem;
+    background-color: transparent;
+    color: $accent;
+    font-size: 11rem;
+    text-transform: uppercase;
+
+    &:hover {
+        color: $accent-bright;
+    }
+}
+
+.filters {
+    display: flex;
+    flex-direction: column;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 4rem 2rem;
+    border: 0;
+    border-radius: 2rem;
+    background-color: transparent;
+    color: $text;
+    font-size: 13rem;
+    text-align: left;
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.07);
+    }
+}
+
+.box {
+    position: relative;
+    flex: 0 0 auto;
+    width: 13rem;
+    height: 13rem;
+    margin-right: 8rem;
+    border: 1rem solid rgba(255, 255, 255, 0.35);
+    border-radius: 2rem;
+    background-color: rgba(0, 0, 0, 0.35);
+}
+
+// The fill alone already reads as "checked", so if the tick fails to draw the
+// control still degrades to something legible.
+.boxChecked {
+    border-color: $accent-bright;
+    background-color: $accent;
+
+    &::after {
+        content: "";
+        position: absolute;
+        left: 4rem;
+        top: 0.5rem;
+        width: 3rem;
+        height: 7.5rem;
+        border: solid #08131b;
+        border-width: 0 2rem 2rem 0;
+        transform: rotate(45deg);
+    }
+}
+
+.label {
+    flex: 1 1 auto;
+}
+
+.footer {
+    margin-top: 7rem;
+    padding-top: 7rem;
+    border-top: 1rem solid rgba(255, 255, 255, 0.1);
+}
+
+// Covers the viewport only while the header is being dragged, so mouse events
+// keep reaching the UI after the cursor leaves the panel. Transparent, and gone
+// the instant the button is released.
+.dragShield {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    // Above the panel, not below it. The panel is moving with the cursor, so if it
+    // paints on top it takes every mousemove the shield exists to receive, and the
+    // drag dies within a few pixels. Transparent, so the panel is still visible
+    // through it.
+    z-index: 20;
+
+    pointer-events: auto;
+    cursor: move;
+}
+
+.actions {
+    display: flex;
+    align-items: stretch;
+}
+
+.bulldozeButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+    padding: 6rem;
+    border: 1rem solid rgba(217, 99, 59, 0.5);
+    border-radius: 3rem;
+    background-color: rgba(217, 99, 59, 0.22);
+    color: $text;
+    font-size: 13rem;
+
+    &:hover {
+        border-color: $danger;
+        background-color: rgba(217, 99, 59, 0.4);
+    }
+}
+
+// Gameface has no :disabled styling of its own here, and the button is left
+// clickable-looking otherwise even though C# ignores an empty selection.
+.bulldozeButtonEmpty {
+    border-color: rgba(255, 255, 255, 0.12);
+    background-color: rgba(255, 255, 255, 0.05);
+    color: $text-dim;
+
+    &:hover {
+        border-color: rgba(255, 255, 255, 0.18);
+        background-color: rgba(255, 255, 255, 0.08);
+    }
+}
+
+.bulldozeIcon {
+    width: 15rem;
+    height: 15rem;
+    margin-right: 6rem;
+}
+
+// Shared by the "Ask" and "SFX" toggles sitting to the right of Bulldoze.
+.miniToggle {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    margin-left: 4rem;
+    padding: 6rem 4rem;
+    border: 1rem solid rgba(255, 255, 255, 0.12);
+    border-radius: 3rem;
+    background-color: rgba(255, 255, 255, 0.05);
+    color: $text;
+    font-size: 11rem;
+
+    &:hover {
+        border-color: rgba(255, 255, 255, 0.22);
+        background-color: rgba(255, 255, 255, 0.09);
+    }
+
+    // The shared .box rule carries an 8rem gap meant for the wider filter rows.
+    .box {
+        margin-right: 3rem;
+    }
+}
+
+.miniLabel {
+    letter-spacing: 0.3rem;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 6rem;
+    font-size: 11rem;
+    color: $text-dim;
+}
+
+.clearButton {
+    padding: 1rem 4rem;
+    border: 0;
+    border-radius: 2rem;
+    background-color: transparent;
+    color: $accent;
+    font-size: 11rem;
+    text-transform: uppercase;
+
+    &:hover {
+        color: $accent-bright;
+    }
+}
+
+.hint {
+    margin-top: 6rem;
+    font-size: 11rem;
+    line-height: 14rem;
+    color: $text-dim;
+}
+
+// --- Confirmation prompt ------------------------------------------------------
+
+// Covers the viewport above everything else this mod draws, and takes pointer
+// events, so the panel, the vanilla HUD and the marquee tool are all unreachable
+// until the prompt is answered. The tool stops raycasting on its own once the
+// pointer is over UI, so this blocks the world too.
+.confirmScrim {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    pointer-events: auto;
+    background-color: rgba(0, 0, 0, 0.55);
+}
+
+.confirmDialog {
+    display: flex;
+    flex-direction: column;
+    width: 330rem;
+
+    padding: 22rem;
+    border: 1rem solid rgba(255, 255, 255, 0.16);
+    border-radius: 5rem;
+    background-color: rgba(11, 18, 24, 0.98);
+    color: $text;
+}
+
+.confirmTitle {
+    margin-bottom: 11rem;
+    font-size: 18rem;
+    font-weight: 600;
+}
+
+.confirmBody {
+    margin-bottom: 20rem;
+    font-size: 14rem;
+    line-height: 19rem;
+    color: $text-dim;
+}
+
+.confirmActions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.confirmButton {
+    min-width: 92rem;
+    margin-left: 9rem;
+    padding: 9rem 14rem;
+    border-radius: 3rem;
+    font-size: 13rem;
+    text-align: center;
+}
+
+.confirmCancel {
+    border: 1rem solid rgba(255, 255, 255, 0.18);
+    background-color: rgba(255, 255, 255, 0.06);
+    color: $text;
+
+    &:hover {
+        border-color: rgba(255, 255, 255, 0.3);
+        background-color: rgba(255, 255, 255, 0.11);
+    }
+}
+
+.confirmAccept {
+    border: 1rem solid rgba(217, 99, 59, 0.6);
+    background-color: rgba(217, 99, 59, 0.3);
+    color: $text;
+
+    &:hover {
+        border-color: $danger;
+        background-color: rgba(217, 99, 59, 0.48);
+    }
+}
