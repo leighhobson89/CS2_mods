@@ -538,3 +538,60 @@ change. See [sfx/README.md](sfx/README.md).
 
 Panel labels are hard-coded English rather than going through `cs2/l10n`; only
 the options page is localised, because it has to be.
+
+## Publishing to Paradox Mods
+
+`Properties/` holds everything the Paradox Mods listing needs. Nothing in it is
+compiled or shipped inside the mod — it is metadata the publisher reads:
+
+| File | What it is |
+|---|---|
+| `PublishConfiguration.xml` | The listing itself: name, descriptions, tags, versions, changelog, `ModId` |
+| `Thumbnail.png` | 512×512 listing image |
+| `PublishProfiles/*.pubxml` | The three Visual Studio publish profiles, one per publisher command |
+
+`<PublishConfigurationPath>` in the `.csproj` points at the XML. The publisher
+validates `DisplayName`, `ShortDescription`, `LongDescription`, `Thumbnail`,
+`ModVersion`, `GameVersion` and at least one `Tag` — a missing one is a hard
+error, not a warning.
+
+### The release loop
+
+Close Cities: Skylines II first — the game holds the deployed DLL open and the
+publisher cannot read a locked file. Then:
+
+```powershell
+dotnet build -c Release     # deploys to $env:CSII_LOCALMODSPATH\BulldozerMarquee
+npm run build               # must come second; DeployWIP wipes the folder
+```
+
+That deployed folder *is* the upload. Check it before publishing — the publisher
+sends the folder wholesale, so anything that lands there ships.
+
+Then run the publisher against that verified folder:
+
+```powershell
+& "$env:CSII_MODPUBLISHERPATH" Publish `
+    'Properties\PublishConfiguration.xml' `
+    -c "$env:CSII_LOCALMODSPATH\BulldozerMarquee" -v
+```
+
+It authenticates through the Paradox account already signed in on this machine;
+credentials never belong in the config or on the command line.
+
+Three commands, and picking the wrong one is the easy mistake:
+
+- **`Publish`** — first listing only. Requires `ModId` to be empty or `0`, and
+  the publisher refuses if it is set. It prints the assigned ID on success; put
+  that in `<ModId Value="…" />` and never run `Publish` for this mod again.
+- **`NewVersion`** — every later release that changes the built output. Bump
+  `<ModVersion>` and rewrite `<ChangeLog>` first, or the listing will claim the
+  previous version's notes.
+- **`Update`** — listing metadata only: description, thumbnail, screenshots,
+  links. Uploads no binary, so it needs no version bump.
+
+`dotnet publish -c Release -p:PublishProfile=PublishNewMod` runs the same thing
+through MSBuild, which builds and deploys first and then invokes the publisher
+with the same arguments. The direct invocation above is preferred because it
+uploads the exact folder you just inspected rather than one MSBuild rebuilds
+underneath you.

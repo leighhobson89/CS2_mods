@@ -1,0 +1,61 @@
+﻿<Publish>
+	<!--Id must be set in order to update existed mod. it is not required for publishing mod for the first time-->
+	<ModId Value="" />
+	<!--Name of the mod to display to players-->
+	<DisplayName Value="Bulldozer Marquee" />
+	<!--Short description of the mod-->
+	<ShortDescription Value="Drag a box over the map, keep only the asset types you ticked, delete them." />
+	<!--Long description of the mod. Single line or multi line. Supports minimal markdown subset-->
+	<LongDescription>
+Bulldozer Marquee adds a box-select bulldozer to Cities: Skylines II. Drag a rectangle over the map, and everything inside it that matches your chosen asset types is highlighted live as you drag. Release to commit the selection, then bulldoze the lot in one go.
+
+## How to use it
+
+1. Click the bulldozer icon in the top-left. The tool takes over the cursor and the filter panel appears in the bottom-left corner — drag its header to move it.
+2. Tick the asset categories the marquee is allowed to catch.
+3. Drag a box over the map. Everything the box covers is ringed as you drag, and the count updates with it.
+4. **Bulldoze** deletes the selection. **Clear** drops the selection without deleting anything.
+
+Right click backs out one step at a time: it cancels an in-progress drag, then clears a selection, then leaves the tool.
+
+## Filters
+
+Trees, props, nodes, segments, buildings, surfaces and net lanes can each be included or excluded independently, so you can clear every tree from an area without touching the roads running through it.
+
+## Options
+
+- **Confirm before bulldozing** — ask before deleting, so a mis-drag costs nothing.
+- **Keep the selection in sync with the filters** — unticking a filter immediately drops that type out of the selection you already made.
+- **Play bulldoze sound** — a sound effect on the Bulldoze button.
+
+All three are in Options &gt; Mods &gt; Bulldozer Marquee, and mirrored by checkboxes on the panel itself.
+
+## Notes
+
+The marquee is a real game tool, not a UI overlay, so it respects your own key bindings, cancels whichever tool was active when you start it, and closes on Escape like every vanilla tool. The selection rectangle is drawn as world geometry, so it drapes over terrain instead of floating flat above a hillside.
+	</LongDescription>
+	<!--Thumbnail-->
+	<Thumbnail Value="Properties/Thumbnail.png" />
+	<!--Screenshot, can be set multiple times-->
+	<!--<Screenshot Value="Properties/Screenshots/01.png" />-->
+	<!--Tag, can be set multiple times-->
+	<Tag Value="Code Mod" />
+	<!--Link to the forum post where the mod can be discussed-->
+	<ForumLink Value="" />
+	<!--Version of the mod-->
+	<ModVersion Value="1.0.0" />
+	<!--Recommended version of the base game to use the mod-->
+	<GameVersion Value="1.6.*" />
+	<!--Dependency for the mod, can be set multiple times-->
+	<!--<Dependency Id="" />-->
+	<!--Required DLC, can be set multiple times. Supported values are "Landmark Buildings", "San Fransisco Set", "Beach Properties", "Urban Promenades", "Modern Architecture"-->
+	<!--<RequiredDLC Value="" />-->
+	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
+	<ChangeLog>
+Initial release.
+	</ChangeLog>
+	<!--External link, can be set multiple times. supported types are "discord", "github", "youtube", "twitch", "x", "paypal", "patreon", "buymeacoffee", "kofi", "crowdin", "gitlab", "gofundme"-->
+	<!--<ExternalLink Type="github" Url="" />-->
+	<!--Supported values Public, Private, Unlisted-->
+	<AccessLevel Value="Public" />
+</Publish>

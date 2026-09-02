@@ -5,6 +5,10 @@
     <AssemblyName>BulldozerMarquee</AssemblyName>
     <RootNamespace>BulldozerMarquee</RootNamespace>
     <LangVersion>9.0</LangVersion>
+    <Configurations>Debug;Release</Configurations>
+
+    <!-- Mod metadata the ModPublisher reads when publishing to Paradox Mods. -->
+    <PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
   </PropertyGroup>
 
   <Import Project="$(CSII_TOOLPATH)\Mod.props" />
