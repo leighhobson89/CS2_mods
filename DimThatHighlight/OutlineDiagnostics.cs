@@ -1,9 +1,9 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.Text;
 using Game.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.Rendering.HighDefinition;
 
 namespace DimThatHighlight
 {
@@ -117,31 +117,15 @@ namespace DimThatHighlight
         }
 
         /// <summary>
-        /// Walks every loaded <see cref="CustomPassVolume"/> looking for the outline
-        /// pass. There is no public accessor for it, and this mirrors how
-        /// BulldozerMarquee reaches <c>UICursorCollection</c> — a
-        /// <see cref="Resources.FindObjectsOfTypeAll"/> sweep, done once and cached,
-        /// because nothing exposes the object any other way.
+        /// The first loaded outline pass, or null. Delegates the sweep to
+        /// <see cref="OutlineCompose.FindPasses"/> so there is one place that knows how to
+        /// reach these.
         /// </summary>
         private static OutlinesWorldUIPass FindPass()
         {
-            foreach (CustomPassVolume volume in Resources.FindObjectsOfTypeAll<CustomPassVolume>())
-            {
-                if (volume == null || volume.customPasses == null)
-                {
-                    continue;
-                }
+            List<OutlinesWorldUIPass> passes = OutlineCompose.FindPasses();
 
-                foreach (CustomPass customPass in volume.customPasses)
-                {
-                    if (customPass is OutlinesWorldUIPass outlines)
-                    {
-                        return outlines;
-                    }
-                }
-            }
-
-            return null;
+            return passes.Count > 0 ? passes[0] : null;
         }
     }
 }

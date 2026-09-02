@@ -184,6 +184,18 @@ $panel-width: 286rem;
     background-color: $accent;
 }
 
+// A reference notch for a slider whose middle means something — on Width, halfway is
+// the thickness the game itself draws. Painted under the fill and the handle, so it
+// shows through the empty half of the track without ever obscuring the value.
+.sliderTick {
+    position: absolute;
+    top: -3rem;
+    width: 1rem;
+    height: 12rem;
+    margin-left: -0.5rem;
+    background-color: rgba(255, 255, 255, 0.55);
+}
+
 .sliderHandle {
     position: absolute;
     top: 50%;

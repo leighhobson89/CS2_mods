@@ -1,29 +1,32 @@
-﻿<Publish>
+<Publish>
 	<!--Id must be set in order to update existed mod. it is not required for publishing mod for the first time-->
 	<ModId Value="157738" />
 	<!--Name of the mod to display to players-->
 	<DisplayName Value="Dim That Highlight" />
 	<!--Short description of the mod-->
-	<ShortDescription Value="Recolour the bright blue outline the game rings hovered assets with, and turn its strength down." />
+	<ShortDescription Value="Recolour the bright blue outline the game rings hovered assets with, and control how strong and how thick it is." />
 	<!--Long description of the mod. Single line or multi line. Supports minimal markdown subset-->
 	<LongDescription>
 Point at anything in Cities: Skylines II and the game rings it in a bright blue outline. It is useful, and it is loud — over a dense district, or when you are just moving the camera around, it is the first thing your eye goes to whether you asked for it or not.
 
-Dim That Highlight lets you pick what colour that outline is, and how hard it reads.
+Dim That Highlight lets you pick what colour that outline is, how hard it reads, and how thick it is drawn.
 
 ## What it does
 
 - **Sixteen colours to choose from** — the twelve-hue colour wheel plus white, two greys and black. Everything is one click; there is nothing to type.
 - **A Strength slider** that takes the outline down from full to nothing. Pull it to zero and the hover highlight is switched off entirely.
-- **Changes apply immediately.** Move the slider and the next thing you point at is drawn the new way. No reload, no restart.
+- **A Width slider** for how thick the line is drawn. The notch in the middle of the track is the game's own width, so you always know where vanilla sits — left of it is a finer line, right of it is heavier, and the far left is no line at all.
+- **Changes apply immediately.** Move a slider and the next thing you point at is drawn the new way. No reload, no restart.
 
 ## How to use it
 
 1. Click the mod's button in the top-left. The panel opens in the bottom-left corner — drag its title bar to move it anywhere you like.
-2. Click a colour, then pull **Strength** down until the highlight stops competing with your city.
-3. Close the panel. The colour keeps applying; the panel is only there when you want to change it.
+2. Click a colour, then pull **Strength** and **Width** down until the highlight stops competing with your city.
+3. Close the panel. Your settings keep applying; the panel is only there when you want to change them.
 
-**Reset** puts the highlight back exactly the way the game draws it. The dot on that button is the game's own colour, read from your running game rather than hardcoded, so it is honest about what it is restoring. The same reset lives in Options &gt; Mods &gt; Dim That Highlight, in case you dim the highlight so far you cannot find anything to click.
+A thin, dim outline in a colour that suits your city is a very different thing to live with than the stock one — and it is still right there the moment you go looking for it.
+
+**Reset** puts the highlight back exactly the way the game draws it — colour, strength and width together. The dot on that button is the game's own colour, and both the colour and the width it restores are read from your running game rather than hardcoded, so it is honest about what it is putting back even after a game patch. The same reset lives in Options &gt; Mods &gt; Dim That Highlight, in case you dim the highlight so far you cannot find anything to click.
 
 ## What it affects
 
@@ -33,7 +36,7 @@ It does not touch the red error, yellow warning or green owner highlights — th
 
 ## Compatibility
 
-No Harmony patches and no replaced systems. The mod writes one value the game already reads every frame, and puts the original back when it unloads — so removing it leaves nothing behind.
+No Harmony patches and no replaced systems. The mod writes two values the game already reads every frame — the hover colour and the outline width — and puts both originals back when it unloads, so removing it leaves nothing behind.
 
 	</LongDescription>
 	<!--Thumbnail-->
@@ -49,7 +52,7 @@ No Harmony patches and no replaced systems. The mod writes one value the game al
 	<!--Link to the forum post where the mod can be discussed-->
 	<ForumLink Value="" />
 	<!--Version of the mod-->
-	<ModVersion Value="1.0.0" />
+	<ModVersion Value="1.1.0" />
 	<!--Recommended version of the base game to use the mod-->
 	<GameVersion Value="1.6.*" />
 	<!--Dependency for the mod, can be set multiple times-->
@@ -58,7 +61,8 @@ No Harmony patches and no replaced systems. The mod writes one value the game al
 	<!--<RequiredDLC Value="" />-->
 	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
 	<ChangeLog>
-Initial release.
+- Added a **Width** slider for how thick the hover outline is drawn. The notch halfway along the track is the game's own width, so vanilla is always one glance away; left of it is finer, right of it is heavier, and the far left is no outline at all.
+- **Reset** now restores width alongside colour and strength.
 	</ChangeLog>
 	<!--External link, can be set multiple times. supported types are "discord", "github", "youtube", "twitch", "x", "paypal", "patreon", "buymeacoffee", "kofi", "crowdin", "gitlab", "gofundme"-->
 	<!--<ExternalLink Type="github" Url="" />-->

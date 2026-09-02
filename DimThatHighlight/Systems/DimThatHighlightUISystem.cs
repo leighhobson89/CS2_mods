@@ -1,4 +1,4 @@
-﻿using Colossal.UI.Binding;
+using Colossal.UI.Binding;
 using Game.Prefabs;
 using Game.UI;
 using Unity.Entities;
@@ -30,7 +30,14 @@ namespace DimThatHighlight
         private ValueBinding<bool> m_Enabled;
         private ValueBinding<int> m_ColorRgb;
         private ValueBinding<int> m_StrengthPercent;
+        private ValueBinding<int> m_WidthPercent;
         private ValueBinding<int> m_DefaultColorRgb;
+
+        /// <summary>
+        /// Outline thickness. Lives on the compose material rather than in ECS, so it has
+        /// its own override object; see <see cref="OutlineWidthOverride"/>.
+        /// </summary>
+        private readonly OutlineWidthOverride m_Width = new OutlineWidthOverride();
 
         /// <summary>
         /// The colour the game shipped with, snapshotted the first time the singleton is
@@ -60,12 +67,17 @@ namespace DimThatHighlight
             int savedStrength = Mod.Settings != null
                 ? Mathf.Clamp(Mod.Settings.StrengthPercent, 0, 100)
                 : Settings.DefaultStrengthPercent;
+            int savedWidth = Mod.Settings != null
+                ? Mathf.Clamp(Mod.Settings.WidthPercent, 0, 100)
+                : Settings.DefaultWidthPercent;
 
             // C# -> React.
             AddBinding(m_Enabled = new ValueBinding<bool>(Group, "Enabled", false));
             AddBinding(m_ColorRgb = new ValueBinding<int>(Group, "ColorRgb", savedColor));
             AddBinding(m_StrengthPercent =
                 new ValueBinding<int>(Group, "StrengthPercent", savedStrength));
+            AddBinding(m_WidthPercent =
+                new ValueBinding<int>(Group, "WidthPercent", savedWidth));
 
             // Seeded from the constant and replaced by the real snapshot the first time
             // the singleton is read, so the palette's stock marker is honest even before
@@ -77,6 +89,7 @@ namespace DimThatHighlight
             AddBinding(new TriggerBinding(Group, "Toggle", Toggle));
             AddBinding(new TriggerBinding<int>(Group, "SetColor", SetColor));
             AddBinding(new TriggerBinding<int>(Group, "SetStrength", SetStrength));
+            AddBinding(new TriggerBinding<int>(Group, "SetWidth", SetWidth));
             AddBinding(new TriggerBinding(Group, "Commit", Commit));
             AddBinding(new TriggerBinding(Group, "RestoreDefault", RestoreDefault));
 
@@ -115,6 +128,16 @@ namespace DimThatHighlight
             Store(m_ColorRgb.value, Mathf.Clamp(percent, 0, 100), save: false);
         }
 
+        /// <summary>
+        /// Dragging the width slider. Like <see cref="SetStrength"/> it fires per mouse
+        /// move and leaves saving to <see cref="Commit"/>. The write itself lands in
+        /// <see cref="Apply"/>, which runs every frame anyway.
+        /// </summary>
+        private void SetWidth(int percent)
+        {
+            m_WidthPercent.Update(Mathf.Clamp(percent, 0, 100));
+        }
+
         /// <summary>Writes whatever is currently applied to the settings file. See <see cref="SetStrength"/>.</summary>
         private void Commit()
         {
@@ -125,6 +148,7 @@ namespace DimThatHighlight
 
             Mod.Settings.ColorRgb = m_ColorRgb.value;
             Mod.Settings.StrengthPercent = m_StrengthPercent.value;
+            Mod.Settings.WidthPercent = m_WidthPercent.value;
             Mod.Settings.ApplyAndSave();
         }
 
@@ -136,6 +160,7 @@ namespace DimThatHighlight
         /// </summary>
         private void RestoreDefault()
         {
+            m_WidthPercent.Update(Settings.DefaultWidthPercent);
             Store(m_DefaultColorRgb.value, Settings.DefaultStrengthPercent, save: true);
         }
 
@@ -174,7 +199,41 @@ namespace DimThatHighlight
             base.OnUpdate();
 
             Apply();
+            ApplyWidth();
         }
+
+        /// <summary>
+        /// Pushes the chosen thickness onto the compose material. Separate from
+        /// <see cref="Apply"/> because it writes to a different thing entirely — a
+        /// <c>Material</c> rather than an ECS singleton — and because it has to keep
+        /// working while <see cref="Apply"/> is bailing out for want of a loaded world:
+        /// the compose material exists whenever the render pipeline does.
+        /// </summary>
+        private void ApplyWidth()
+        {
+            m_Width.Apply(WidthFor(m_WidthPercent.value));
+        }
+
+        /// <summary>
+        /// Slider percent to an absolute outline width. <b>50 is the game's own width</b>,
+        /// so the multiplier is <c>percent / 50</c> — 0 at one end, twice vanilla at the
+        /// other. Scaling the snapshotted value rather than storing an absolute is what
+        /// keeps the midpoint meaning "vanilla" even if a patch changes what vanilla is.
+        /// </summary>
+        private float WidthFor(int percent)
+        {
+            float baseWidth = m_Width.hasVanillaWidth ? m_Width.vanillaWidth : DefaultOutlineWidth;
+
+            return baseWidth * (Mathf.Clamp(percent, 0, 100) / (float)Settings.DefaultWidthPercent);
+        }
+
+        /// <summary>
+        /// The shader's own declared default for <c>_OutlineWidth</c>, used only before the
+        /// material has been found. Read from the serialised property table of
+        /// <c>BH/Selection/OutlinesCompose</c>, not guessed — but the material is free to
+        /// override it, which is why the runtime value is snapshotted instead.
+        /// </summary>
+        private const float DefaultOutlineWidth = 5f;
 
         private void Apply()
         {
@@ -222,14 +281,16 @@ namespace DimThatHighlight
                 Mod.Settings.restoreDefaultRequested -= RestoreDefault;
             }
 
-            // Never leave the override behind when the mod unloads. The snapshot is the
-            // vanilla value, so this is a restore rather than a guess.
+            // Never leave the override behind when the mod unloads. Both snapshots are
+            // vanilla values, so these are restores rather than guesses.
             if (m_HasVanillaColor &&
                 m_RenderingSettingsQuery.TryGetSingleton(out RenderingSettingsData data))
             {
                 data.m_HoveredColor = m_VanillaColor;
                 m_RenderingSettingsQuery.SetSingleton(data);
             }
+
+            m_Width.Restore();
 
             base.OnDestroy();
         }

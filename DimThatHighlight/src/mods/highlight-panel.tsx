@@ -9,8 +9,10 @@ import {
     restoreDefault,
     setColor,
     setStrength,
+    setWidth,
     strengthPercent$,
     toggle,
+    widthPercent$,
 } from "./bindings";
 import { applyStrength, PALETTE, toHex } from "./palette";
 import styles from "./highlight-panel.module.scss";
@@ -25,27 +27,106 @@ interface MoveDrag {
 
 interface SliderDrag {
     readonly kind: "slider";
+    /** Which slider is being dragged. There are two, and one shield serves both. */
+    readonly target: SliderTarget;
     /** The track's box, cached at mousedown: the shield covers it, so it cannot be re-measured mid-drag. */
     readonly left: number;
     readonly width: number;
 }
+
+type SliderTarget = "strength" | "width";
+
+/**
+ * Which trigger each slider drives. Held as data rather than as a callback on the drag
+ * so the drag state stays a plain value — the shield's move handler reads it out of a
+ * ref, and a ref holding a closure is a much easier thing to get stale.
+ */
+const SLIDER_TRIGGERS: Record<SliderTarget, (percent: number) => void> = {
+    strength: setStrength,
+    width: setWidth,
+};
 
 type Drag = MoveDrag | SliderDrag;
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, Math.round(value)));
 
 /**
- * The Highlight Properties panel: a 64-swatch palette and a strength slider for the
- * outline the game draws around whatever the cursor is over.
+ * Where the game's own outline width sits on the Width slider. Must match
+ * `Settings.DefaultWidthPercent` in C#, which is the value the multiplier is divided
+ * by — the two halves of one wire contract, like every other paired constant here.
+ */
+const VANILLA_WIDTH_PERCENT = 50;
+
+interface SliderProps {
+    readonly label: string;
+    readonly target: SliderTarget;
+    readonly percent: number;
+    /** What the number reads as. Percent for Strength, a multiplier for Width. */
+    readonly display: string;
+    readonly trackRef: React.RefObject<HTMLDivElement>;
+    readonly onMouseDown: (
+        event: React.MouseEvent,
+        target: SliderTarget,
+        element: HTMLDivElement | null,
+    ) => void;
+    /** Draws a reference notch at this percent, for a slider whose middle means something. */
+    readonly tickPercent?: number;
+    readonly tooltip: string;
+}
+
+/**
+ * A plain div rather than a cs2/ui control: the game's component library ships no
+ * slider, and an `<input type=range>` is not something cohtml styles usefully.
  *
- * Only visibility and window position are decided here. The colour itself lives in
- * C#, which is what writes it into the game's RenderingSettingsData — so the panel
- * can be closed, or never opened at all, and the chosen colour still applies.
+ * The track element is passed in by ref rather than measured here, because the drag
+ * has to cache the track's box at mousedown — once the full-screen shield is up, the
+ * track cannot be measured under the cursor any more.
+ */
+const Slider = ({
+    label,
+    target,
+    percent,
+    display,
+    trackRef,
+    onMouseDown,
+    tickPercent,
+    tooltip,
+}: SliderProps) => (
+    <Tooltip tooltip={tooltip}>
+        <div className={styles.sliderRow}>
+            <span className={styles.sliderLabel}>{label}</span>
+
+            <div
+                ref={trackRef}
+                className={styles.sliderTrack}
+                onMouseDown={(event) => onMouseDown(event, target, trackRef.current)}
+            >
+                {tickPercent !== undefined && (
+                    <div className={styles.sliderTick} style={{ left: `${tickPercent}%` }} />
+                )}
+                <div className={styles.sliderFill} style={{ width: `${percent}%` }} />
+                <div className={styles.sliderHandle} style={{ left: `${percent}%` }} />
+            </div>
+
+            <span className={styles.sliderValue}>{display}</span>
+        </div>
+    </Tooltip>
+);
+
+/**
+ * The Dim That Highlight panel: a 16-swatch palette plus strength and width sliders
+ * for the outline the game draws around whatever the cursor is over.
+ *
+ * Only visibility and window position are decided here. Everything else lives in C#,
+ * which writes the colour into the game's RenderingSettingsData and the width onto the
+ * outline compose material — so the panel can be closed, or never opened at all, and
+ * the chosen appearance still applies.
  */
 export const HighlightPanel = () => {
     const enabled = useValue(enabled$);
     const rgb = useValue(colorRgb$);
     const strength = useValue(strengthPercent$);
+    const width = useValue(widthPercent$);
     const defaultRgb = useValue(defaultColorRgb$);
 
     // Displacement from the resting position in the stylesheet. Closing the panel
@@ -55,7 +136,8 @@ export const HighlightPanel = () => {
     const [drag, setDrag] = useState<Drag | null>(null);
     const dragRef = useRef<Drag | null>(null);
     const panelRef = useRef<HTMLDivElement>(null);
-    const trackRef = useRef<HTMLDivElement>(null);
+    const strengthTrackRef = useRef<HTMLDivElement>(null);
+    const widthTrackRef = useRef<HTMLDivElement>(null);
 
     const beginDrag = (next: Drag) => {
         dragRef.current = next;
@@ -68,7 +150,7 @@ export const HighlightPanel = () => {
         dragRef.current = null;
         setDrag(null);
 
-        // The slider does not save while it is moving — see setStrength in bindings.ts.
+        // Neither slider saves while it is moving — see setStrength in bindings.ts.
         if (finished !== null && finished.kind === "slider") {
             commit();
         }
@@ -102,7 +184,8 @@ export const HighlightPanel = () => {
 
     const hex = toHex(rgb);
     const appliedHex = toHex(applyStrength(rgb, strength));
-    const isDefault = rgb === defaultRgb && strength === 100;
+    const isDefault =
+        rgb === defaultRgb && strength === 100 && width === VANILLA_WIDTH_PERCENT;
 
     const onHeaderMouseDown = (event: React.MouseEvent) => {
         beginDrag({
@@ -152,18 +235,27 @@ export const HighlightPanel = () => {
             return;
         }
 
-        setStrength(clampPercent(((clientX - track.left) / track.width) * 100));
+        SLIDER_TRIGGERS[track.target](
+            clampPercent(((clientX - track.left) / track.width) * 100),
+        );
     };
 
-    const onTrackMouseDown = (event: React.MouseEvent) => {
-        const element = trackRef.current;
-
+    const onTrackMouseDown = (
+        event: React.MouseEvent,
+        target: SliderTarget,
+        element: HTMLDivElement | null,
+    ) => {
         if (element === null) {
             return;
         }
 
         const rect = element.getBoundingClientRect();
-        const track: SliderDrag = { kind: "slider", left: rect.left, width: rect.width };
+        const track: SliderDrag = {
+            kind: "slider",
+            target,
+            left: rect.left,
+            width: rect.width,
+        };
 
         // Pressing anywhere on the track jumps the handle there, so a coarse change
         // does not need a drag at all.
@@ -237,8 +329,8 @@ export const HighlightPanel = () => {
 
                 <div className={styles.intro}>
                     Point at anything in the city and the game rings it in bright blue.
-                    Pick a colour it can use instead, then pull Strength down until it
-                    stops shouting.
+                    Pick a colour it can use instead, then use Strength and Width to
+                    tone it down until it stops shouting.
                 </div>
 
                 {/* Plain divs rather than cs2/ui Buttons. A Button per swatch would buy
@@ -264,23 +356,29 @@ export const HighlightPanel = () => {
                     ))}
                 </div>
 
-                <div className={styles.sliderRow}>
-                    <span className={styles.sliderLabel}>Strength</span>
+                <Slider
+                    label="Strength"
+                    target="strength"
+                    percent={strength}
+                    display={`${strength}%`}
+                    trackRef={strengthTrackRef}
+                    onMouseDown={onTrackMouseDown}
+                    tooltip="How hard the outline reads. The game's outline shader ignores the colour's alpha, so this scales the colour itself — 0% leaves no highlight at all."
+                />
 
-                    {/* A plain div rather than a cs2/ui control: the game's component
-                        library ships no slider, and an <input type=range> is not
-                        something cohtml styles usefully. */}
-                    <div
-                        ref={trackRef}
-                        className={styles.sliderTrack}
-                        onMouseDown={onTrackMouseDown}
-                    >
-                        <div className={styles.sliderFill} style={{ width: `${strength}%` }} />
-                        <div className={styles.sliderHandle} style={{ left: `${strength}%` }} />
-                    </div>
-
-                    <span className={styles.sliderValue}>{`${strength}%`}</span>
-                </div>
+                <Slider
+                    label="Width"
+                    target="width"
+                    percent={width}
+                    display={`${(width / VANILLA_WIDTH_PERCENT).toFixed(1)}×`}
+                    trackRef={widthTrackRef}
+                    onMouseDown={onTrackMouseDown}
+                    // The one place a slider is not "more is more": halfway is the width
+                    // the game itself draws, so the tick is the reference point the whole
+                    // control is read against.
+                    tickPercent={VANILLA_WIDTH_PERCENT}
+                    tooltip="How thick the outline is drawn. The notch on the track is the game's own width; right of it is thicker, left is thinner."
+                />
 
                 <div className={styles.footer}>
                     <Tooltip tooltip="The colour as it will be drawn, with Strength applied.">
@@ -297,7 +395,7 @@ export const HighlightPanel = () => {
                         marked in the grid. It is snapshotted from the running game, so
                         it is not one of the 16 swatches and never will be — a marker
                         looking for it in the grid would simply never draw. */}
-                    <Tooltip tooltip="Put the highlight back to the colour and strength the game draws it in.">
+                    <Tooltip tooltip="Put the highlight back to the colour, strength and width the game draws it in.">
                         <Button
                             theme={{
                                 button: isDefault
@@ -319,8 +417,8 @@ export const HighlightPanel = () => {
                     Written the obvious way, JSX emits separate text children and cohtml
                     lays each out as its own line. */}
                 <div className={styles.hint}>
-                    {strength === 0
-                        ? "Strength is at zero, so the highlight is off entirely — you will get no ring at all when you point at something."
+                    {strength === 0 || width === 0
+                        ? `${strength === 0 ? "Strength" : "Width"} is at zero, so the highlight is off entirely — you will get no ring at all when you point at something.`
                         : `${hex.toUpperCase()} at ${strength}%. Roads, districts and building lots use this too, and it keeps applying once this panel is closed.`}
                 </div>
             </div>

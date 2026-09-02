@@ -1,4 +1,4 @@
-﻿using Colossal.IO.AssetDatabase;
+using Colossal.IO.AssetDatabase;
 using Game.Modding;
 using Game.Settings;
 
@@ -44,6 +44,14 @@ namespace DimThatHighlight
         /// </summary>
         public const int DefaultStrengthPercent = 100;
 
+        /// <summary>
+        /// The midpoint of the width slider, and therefore the game's own outline
+        /// thickness. Width is expressed as a percentage where <b>50 is vanilla</b> rather
+        /// than as an absolute, because the absolute is read from the running game and a
+        /// stored number would go stale the moment a patch moved it.
+        /// </summary>
+        public const int DefaultWidthPercent = 50;
+
         public Settings(IMod mod)
             : base(mod)
         {
@@ -75,6 +83,13 @@ namespace DimThatHighlight
         public int StrengthPercent { get; set; }
 
         /// <summary>
+        /// Outline thickness, 0-100, where 50 is the game's own width and 100 is twice it.
+        /// See <see cref="DefaultWidthPercent"/> for why it is stored relative.
+        /// </summary>
+        [SettingsUIHidden]
+        public int WidthPercent { get; set; }
+
+        /// <summary>
         /// Puts the highlight back to how the game draws it. Present on the options
         /// page as well as the panel so a highlight turned all the way down — and
         /// therefore invisible — can be recovered without having to find the panel
@@ -97,6 +112,7 @@ namespace DimThatHighlight
         {
             ColorRgb = DefaultColorRgb;
             StrengthPercent = DefaultStrengthPercent;
+            WidthPercent = DefaultWidthPercent;
         }
     }
 }

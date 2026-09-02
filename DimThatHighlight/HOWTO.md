@@ -1,6 +1,6 @@
 # DimThatHighlight
 
-Recolour and tone down the outline the game draws around whatever the cursor is over.
+Recolour, dim and thin the outline the game draws around whatever the cursor is over.
 
 For the architecture every mod in this repo shares — bindings, mount points, the
 build toolchain — see [../docs/HOWTO.md](../docs/HOWTO.md). This file covers only
@@ -10,14 +10,18 @@ what is specific to this mod.
 
 1. Click the mod icon in the top-left. The **Dim That Highlight!** panel appears in
    the bottom-left corner; drag its title bar to move it.
-2. Click one of the 16 swatches, then pull **Strength** down until the highlight
-   stops shouting. Strength 0 turns it off entirely.
+2. Click one of the 16 swatches, then pull **Strength** and **Width** down until the
+   highlight stops shouting. Either at 0 turns it off entirely.
 3. Hover anything in the city. The outline is drawn in the chosen colour.
 
-The colour applies whether the panel is open or not, and is written to the mod's
-settings file, so it survives closing the panel, reloading a save and restarting the
+All three apply whether the panel is open or not, and are written to the mod's
+settings file, so they survive closing the panel, reloading a save and restarting the
 game. **Reset** — on the panel, and mirrored in Options > Mods > Dim That Highlight
-— puts it back to the colour the game itself uses.
+— puts all three back to what the game itself uses.
+
+Colour and width come from two entirely different places, which is the thing to know
+before touching either: the colour is an ECS singleton, the width is a property on a
+render material. They are covered separately below.
 
 ## Where the highlight colour actually lives
 
@@ -94,6 +98,52 @@ It runs once, logs at info level, and swallows every exception: a diagnostic tha
 break the mod it is diagnosing is worse than no diagnostic. It is research scaffolding,
 not a feature — delete it once the question is settled.
 
+## Width lives somewhere else entirely
+
+The colour comes from the *first* stage of the outline pass — the silhouette fill.
+The **thickness** comes from the second: `OutlinesWorldUIPass.m_FullscreenOutline`,
+the material on the fullscreen quad that edge-detects over that silhouette. Its
+shader is `BH/Selection/OutlinesCompose`, and it declares seven properties:
+
+| Property | Type | Shader default |
+|---|---|---|
+| `_SamplePrecision` | Range 1–3 | 1 |
+| **`_OutlineWidth`** | **Float** | **5** |
+| `_InnerColor` | Color | (1, 1, 0, 0.5) |
+| `_OuterColor` | Color | (1, 1, 0, 1) |
+| `_Texture` | Texture | black |
+| `_TextureSize` | Vector | (64, 64) |
+| `_BehindFactor` | Range 0–1 | 0.2 |
+
+Those came out of the shader asset's serialised property table in
+`sharedassets0.assets`, not from guessing — which is worth recording, because the
+first attempt at controlling the outline went wrong precisely by assuming what a
+shader did with a value. `_OutlineWidth` is a plain settable float, so the width
+control is a `Material.SetFloat` and nothing more exotic.
+
+**The slider is relative, and its midpoint is vanilla.** `Settings.DefaultWidthPercent`
+is 50, and `WidthFor` computes `snapshottedWidth * (percent / 50)` — so 0 is no
+outline, 50 is exactly what the game draws, 100 is twice as thick. Storing a
+multiplier rather than an absolute is what keeps "halfway means vanilla" true after a
+patch that changes the stock width; the shader default of 5 is only a fallback for the
+window before the material has been found.
+
+### The material needs different care to the singleton
+
+`OutlineWidthOverride` follows the same snapshot / compare / restore shape as the
+colour, with one extra concern. A `Material` is a Unity object that can be destroyed
+and rebuilt when the render pipeline reloads, and a stale reference to a destroyed
+Unity object is **not** null in the ordinary C# sense — it is a live managed wrapper
+around nothing, and Unity's overloaded `==` is the only thing that reports it. So
+`Acquire` sweeps its cached list with `material == null` every call rather than
+trusting the reference it already has.
+
+Re-finding is throttled to once every 120 frames while nothing is cached, because the
+only way to reach the pass is `Resources.FindObjectsOfTypeAll<CustomPassVolume>()`,
+which walks every loaded object. It has to keep retrying rather than give up: the pass
+does not exist in the main menu, so the first several sweeps legitimately find
+nothing. Once a material is cached the per-frame cost is one `GetFloat`.
+
 ## Why no Harmony, and why no snapshot file
 
 Nothing in the game writes `RenderingSettingsData` after
@@ -128,10 +178,11 @@ float".
 
 ## The slider does not save; the swatches do
 
-`SetStrength` fires on every mouse move of a slider drag. It applies the colour but
-deliberately does **not** call `ApplyAndSave()` — that writes the settings file, and
+`SetStrength` and `SetWidth` fire on every mouse move of a slider drag. They apply
+immediately but deliberately do **not** call `ApplyAndSave()` — that writes the settings file, and
 doing it per frame puts disk I/O in the middle of an interaction that has to stay
-smooth. The panel calls the separate `Commit` trigger on mouse-up. Picking a swatch is
+smooth. The panel calls the separate `Commit` trigger on mouse-up, and `Commit` writes
+whatever is currently applied — so one handler covers both sliders. Picking a swatch is
 one discrete act, so it saves directly.
 
 ## The palette, and why it kept shrinking
@@ -208,10 +259,17 @@ is in `rem` because CS2 scales its UI through the root font size, dragging needs
 full-screen shield rather than `window` listeners, the shield must paint *above* the
 panel, and a drag must end on `blur`. What is specific here:
 
-- **The shield serves two drags.** Moving the window and dragging the Strength slider
-  both need mouse events from outside the element that started them, so they share one
-  shield and one `dragRef`. The slider caches the track's bounding box at mousedown,
+- **The shield serves three drags.** Moving the window and dragging either slider all
+  need mouse events from outside the element that started them, so they share one
+  shield and one `dragRef`. Each slider caches its track's bounding box at mousedown,
   because once the shield is up the track cannot be re-measured under the cursor.
+- **Which slider is being dragged is stored as data, not as a callback.** `SliderDrag`
+  carries a `target` string that indexes `SLIDER_TRIGGERS`. Putting the trigger
+  function on the drag object instead would work, but a ref holding a closure is a much
+  easier thing to leave stale than a ref holding a string.
+- **Width shows a multiplier, not a percent, and draws a notch at its midpoint.** A
+  slider whose middle means something needs to say so on the control itself; `1.0×`
+  next to a tick at 50% is what makes "halfway is vanilla" legible without a tooltip.
 - **The swatches are plain `div`s, not `cs2/ui` `Button`s.** A `Button` would bring
   vanilla hover, focus and click sounds, but this is a grid of them — the sound alone
   would fire on every pass of the cursor across the palette, and the vanilla focus ring

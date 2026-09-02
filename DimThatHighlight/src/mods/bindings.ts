@@ -20,6 +20,9 @@ export const colorRgb$ = bindValue<number>(GROUP, "ColorRgb", 0x8080ff);
  */
 export const strengthPercent$ = bindValue<number>(GROUP, "StrengthPercent", 100);
 
+/** Outline thickness, 0-100, where 50 is the game's own width. See {@link setWidth}. */
+export const widthPercent$ = bindValue<number>(GROUP, "WidthPercent", 50);
+
 /**
  * The colour the game itself uses, snapshotted in C# before this mod writes
  * anything. Published so the palette can mark it and Reset can be honest about what
@@ -37,6 +40,16 @@ export const setColor = (rgb: number) => trigger(GROUP, "SetColor", rgb);
  * when the drag ends.
  */
 export const setStrength = (percent: number) => trigger(GROUP, "SetStrength", percent);
+
+/**
+ * Outline thickness, 0-100, where **50 is the width the game itself draws**. The C#
+ * side scales its snapshot of the game's own value by `percent / 50`, so 0 is no
+ * outline and 100 is twice as thick. Stored relative rather than absolute so the
+ * midpoint keeps meaning "vanilla" even if a patch moves what vanilla is.
+ *
+ * Live and not saved, like {@link setStrength}; call {@link commit} on mouse-up.
+ */
+export const setWidth = (percent: number) => trigger(GROUP, "SetWidth", percent);
 
 /** Writes whatever is currently applied to the settings file. See {@link setStrength}. */
 export const commit = () => trigger(GROUP, "Commit");
