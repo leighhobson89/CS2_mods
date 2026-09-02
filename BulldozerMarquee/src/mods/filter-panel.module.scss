@@ -8,6 +8,16 @@ $accent: #4ba7d8;
 $accent-bright: #7fc9ef;
 $danger: #d9633b;
 
+// Vanilla does not give a generic control its own hover colour — it lays a
+// translucent white film over whatever the control is already painted, which is
+// what makes one value correct on every background. These are the game's own
+// --hoverColor and --activeColor, read from its compiled stylesheet; see
+// docs/ui-icon-standards.md. Controls with a *semantic* colour (the danger-red
+// Bulldoze and Confirm buttons) keep their own ramp, exactly as vanilla's
+// dialog Yes/No buttons do.
+$hover-film: rgba(255, 255, 255, 0.1);
+$active-film: rgba(255, 255, 255, 0.2);
+
 .panel {
     // The Game host is the full-screen container, so unlike the toolbar icon this
     // has to place itself. There is no GameBottomLeft mount point to append to.
@@ -64,7 +74,11 @@ $danger: #d9633b;
 
     &:hover {
         border-color: rgba(255, 255, 255, 0.24);
-        background-color: rgba(255, 255, 255, 0.09);
+        background-color: $hover-film;
+    }
+
+    &:active {
+        background-color: $active-film;
     }
 }
 
@@ -138,7 +152,7 @@ $danger: #d9633b;
     text-align: left;
 
     &:hover {
-        background-color: rgba(255, 255, 255, 0.07);
+        background-color: $hover-film;
     }
 }
 
@@ -235,7 +249,7 @@ $danger: #d9633b;
 
     &:hover {
         border-color: rgba(255, 255, 255, 0.18);
-        background-color: rgba(255, 255, 255, 0.08);
+        background-color: $hover-film;
     }
 }
 
@@ -262,7 +276,7 @@ $danger: #d9633b;
 
     &:hover {
         border-color: rgba(255, 255, 255, 0.22);
-        background-color: rgba(255, 255, 255, 0.09);
+        background-color: $hover-film;
     }
 
     // The shared .box rule carries an 8rem gap meant for the wider filter rows.
@@ -391,7 +405,7 @@ $danger: #d9633b;
 
     &:hover {
         border-color: rgba(255, 255, 255, 0.3);
-        background-color: rgba(255, 255, 255, 0.11);
+        background-color: $hover-film;
     }
 }
 

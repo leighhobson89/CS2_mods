@@ -1,7 +1,7 @@
 import { useValue } from "cs2/api";
 import { Button, Tooltip } from "cs2/ui";
 import { useEffect, useRef, useState } from "react";
-import bulldozeIcon from "../../icon/toggle-on.png";
+import bulldozeIcon from "../../icon/toggle-on.svg";
 import {
     bulldoze,
     clearSelection,
@@ -21,7 +21,7 @@ import {
     toggleSfx,
 } from "./bindings";
 import { ALL_FILTERS, FILTERS } from "./filters";
-import { getMode, MODES } from "./modes";
+import { getMode, getModeIcon, MODES } from "./modes";
 import styles from "./filter-panel.module.scss";
 
 interface DragOrigin {
@@ -58,6 +58,13 @@ export const BulldozerMarqueePanel = () => {
     const panelRef = useRef<HTMLDivElement>(null);
     const [confirming, setConfirming] = useState(false);
 
+    // Which mode button the pointer is over, by mode value. Held here rather than
+    // per button so only one can ever read as hovered — cohtml does not always
+    // deliver a mouseleave when a button is covered mid-hover (the drag shield and
+    // the confirm scrim both do exactly that), and independent per-button flags
+    // would leave the abandoned one stuck on its hover icon.
+    const [hoveredMode, setHoveredMode] = useState<number | null>(null);
+
     // Alt-tabbing mid-drag never delivers the mouseup, which used to leave the drag
     // armed with a stale anchor: the next mouse move on returning applied the whole
     // accumulated delta at once and flung the panel off-screen, which looked like
@@ -80,6 +87,7 @@ export const BulldozerMarqueePanel = () => {
         if (!enabled) {
             setConfirming(false);
             setDragging(false);
+            setHoveredMode(null);
             dragOrigin.current = null;
         }
     }, [enabled]);
@@ -92,6 +100,7 @@ export const BulldozerMarqueePanel = () => {
     const hasSelection = selectionCount > 0;
 
     const onHeaderMouseDown = (event: React.MouseEvent) => {
+        setHoveredMode(null);
         dragOrigin.current = {
             mouseX: event.clientX,
             mouseY: event.clientY,
@@ -161,6 +170,7 @@ export const BulldozerMarqueePanel = () => {
         }
 
         if (confirmBeforeBulldoze) {
+            setHoveredMode(null);
             setConfirming(true);
             return;
         }
@@ -214,10 +224,24 @@ export const BulldozerMarqueePanel = () => {
                 <div className={styles.modeBar} onMouseDown={onHeaderMouseDown}>
                     {MODES.map((definition) => {
                         const active = mode === definition.value;
+                        const hovered = hoveredMode === definition.value;
 
                         return (
                             <Tooltip key={definition.value} tooltip={definition.tooltip}>
-                                <div onMouseDown={(event) => event.stopPropagation()}>
+                                {/* The wrapper carries the hover tracking as well as
+                                    the mousedown guard, rather than the Button: it is
+                                    a plain DOM element, so the events cannot be
+                                    swallowed by whatever the vanilla component does
+                                    with the props it is handed. */}
+                                <div
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onMouseEnter={() => setHoveredMode(definition.value)}
+                                    onMouseLeave={() =>
+                                        setHoveredMode((current) =>
+                                            current === definition.value ? null : current,
+                                        )
+                                    }
+                                >
                                     <Button
                                         theme={{
                                             button: active
@@ -229,7 +253,7 @@ export const BulldozerMarqueePanel = () => {
                                     >
                                         <img
                                             className={styles.modeIcon}
-                                            src={active ? definition.selectedIcon : definition.icon}
+                                            src={getModeIcon(definition, active, hovered)}
                                         />
                                     </Button>
                                 </div>

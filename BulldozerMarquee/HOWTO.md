@@ -312,6 +312,22 @@ Each mode also carries its own `hint`, the line shown under the actions row whil
 nothing is selected. It is per-mode data rather than a ternary in the panel so
 that adding a mode cannot leave a stale hint behind.
 
+Each mode also carries three icons — resting, hover and selected — and
+`getModeIcon` is the single place that decides between them, so the precedence
+cannot drift between the panel and anything else that renders a mode button.
+**Selected beats hovered beats resting:** an active mode keeps its selected icon
+even under the cursor, because "which mode am I in" is more useful than "what am
+I pointing at". The toolbar button in `mod-button.tsx` follows the same rule and
+needs no on-hover artwork, since the active state is already drawn in the vanilla
+selected style.
+
+Hover is tracked as one `hoveredMode` value rather than a flag per button. cohtml
+does not reliably deliver a `mouseleave` when an element is *covered* mid-hover,
+and both the drag shield and the confirm scrim do exactly that — with independent
+flags the abandoned button would stay stuck on its hover icon. A single value
+cannot have two buttons hovered at once, and it is cleared on the way into a drag,
+into the prompt, and whenever the panel closes.
+
 Switching mode calls `CancelGesture` before `ClearSelection`. A gesture belongs to
 the mode that started it, and half a polygon left standing would be reinterpreted
 by whichever mode was switched to.

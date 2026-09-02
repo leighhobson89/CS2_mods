@@ -8,6 +8,29 @@ For the architecture behind mod UI (bindings, module registry, the build
 toolchain) see [HOWTO.md](HOWTO.md). For vanilla systems, see
 [systems-glossary.md](systems-glossary.md).
 
+## Quick facts
+
+| | |
+|---|---|
+| **Canvas size** | 64 × 64 px (SVG viewBox `0 0 64 64`) |
+| **Live glyph area** | 36 × 36 px inside a 40px button — leave ~6–8% margin, don't fill the canvas |
+| **Format** | SVG, monochrome/single-path, `tinted` where possible. PNG only for genuinely raster art, 256 × 256 px max |
+| **Unit** | `rem`, never `px` — 1rem ≈ 1px at 1920×1080 |
+| **Accent blue (base)** | `#4bc3f1` — `--accentColorNormal` |
+| **Accent blue (hover)** | `#7ad3f5` — `--accentColorNormal-hover` |
+| **Accent blue (selected)** | `#9ee2fc` — `--accentColorLight` |
+| **Selected blue (list/toggle)** | `#1e83aa` — `--selectedColor` (different component, different blue — see §6) |
+| **Hover state** | `rgba(255,255,255,0.1)` white film over the resting colour, not a new colour |
+| **Active/pressed state** | `rgba(255,255,255,0.2)` white film |
+| **Disabled state** | `rgba(95,95,95,0.6)` |
+| **Selected text colour** | `rgba(20,27,34,0.6)` — near-black, inverted from the white default |
+| **Select animation** | `blinkOnSelect`, 250ms flash of `#92dbf7` on toggle |
+| **Button size** | 40rem square (`--floatingToggleSize`), 6rem corner radius |
+| **Panel corner radius** | 4rem outer / 3rem inner |
+
+Everything above is sourced and explained in full below — this table is a
+lookup, not a substitute for §5–§7 when a decision actually depends on it.
+
 ## How to read this
 
 The same confidence markers the glossary uses.
@@ -104,11 +127,14 @@ Export at **4× the largest size the icon will ever render at**, and no larger.
 The button is 40rem (§4), so 40px at 1080p, 80px at 4K, and up to roughly 120px
 at 4K with the UI scale pushed high. **256×256 covers every case with headroom.**
 
-> **[REPO] Our own icons are wildly over-budget.** Every icon in this repo is
-> 1254×1254 — around 10× the pixels ever displayed. `MidnightToggle/icon/midnightToggle.png`
-> is 1050 KB for a button that renders at 40px. The others are 11–60 KB, which is
-> merely wasteful; the 1 MB one is worth fixing on its own. Re-exporting the set
-> at 256×256 would cost nothing visually.
+> **[REPO] `BulldozerMarquee` is now all SVG** — twelve icons on a 256×256
+> viewBox with explicit `width`/`height`, plain paths, no styles or filters, 108 KB
+> for the set. It previously shipped 1254×1254 PNGs at roughly 10× the pixels ever
+> displayed.
+>
+> **`MidnightToggle` has not been converted.** Its two icons are still 1254×1254
+> PNGs, and `midnightToggle.png` is **1050 KB** for a button that renders at 40px.
+> That one is worth fixing on its own.
 
 ## 4. Component sizes
 
@@ -309,11 +335,14 @@ colours from CSS for free. A pair of PNGs — an "off" and an "on" — is the
 workaround for not having done that, and it does not scale: each new state means
 another export.
 
-> **[REPO] Every mod in this repo takes the two-PNG route** (`toggle-off.png` /
-> `toggle-on.png`, `marquee.png` / `marquee-selected.png`). It works, and the
-> mode icons genuinely differ between states rather than just changing colour, so
-> it is not simply wrong. But `toggle-off`/`toggle-on` is exactly the case a
-> single tinted SVG would replace.
+> **[REPO] `BulldozerMarquee` ships one file per state** — resting, hover and
+> selected for each mode button, plus off/off-hover/on for the toolbar button.
+> They are SVGs now, but still separate files rather than one tinted source.
+>
+> That is defensible for the *mode* icons, whose three states differ in shape and
+> not merely in colour. It is harder to defend for `toggle-off` / `toggle-off-hover`
+> / `toggle-on`, which is close to the case a single `tinted` SVG plus three CSS
+> rules would replace outright.
 
 ## 8. Serving icons
 
@@ -367,19 +396,28 @@ Measured against the above **[REPO]**. None of these are bugs; they are drift.
 
 | Finding | Current | Standard | Impact |
 |---|---|---|---|
-| Icon canvas | 1254×1254 PNG | 256×256 max, ideally SVG | ~10× the pixels ever shown |
-| `MidnightToggle/icon/midnightToggle.png` | **1050 KB** | < 20 KB | Worth fixing on its own |
-| Off/on icon pairs | Two PNGs each | One tinted SVG | Doubles assets, blocks free state colours |
+| Icon canvas | ~~1254×1254 PNG~~ → 256×256 SVG | 256×256 max, ideally SVG | **Fixed** in `BulldozerMarquee`; `MidnightToggle` still PNG |
+| `MidnightToggle/icon/midnightToggle.png` | **1050 KB** | < 20 KB | Still outstanding — worth fixing on its own |
+| Off/on/hover icon sets | One SVG per state | One tinted SVG | Mode icons differ in shape (fair); the toolbar toggle does not |
 | `$accent` in `filter-panel.module.scss` | `#4ba7d8` | `#4bc3f1` | Visibly duller than vanilla beside it |
 | `$accent-bright` | `#7fc9ef` | `#7ad3f5` | Near enough; harmless |
 | `kMarqueeColor` (overlay) | `#4FA8DB` | `#4bc3f1` | Comment claims "the game's UI blue"; it is not |
 | `kMarkerColor` (overlay) | `#4CD96B` | `#8bdb46` (`--positiveColor`) | Reads greener//more saturated than vanilla's positive |
 | SCSS colours | Hardcoded SCSS `$vars` | `var(--token)` | Breaks under the light and orange themes |
+| Generic hover films | ~~0.07 / 0.08 / 0.09 / 0.11~~ → `0.1` | `rgba(255,255,255,0.1)` | **Fixed** — five near-misses now share `$hover-film` |
 
-The last row is the one with real consequence: the panel is built from SCSS
-variables compiled at build time, so a player on a non-default theme gets a panel
-that does not follow the rest of their UI. Switching to `var(--accentColorNormal)`
-and friends fixes that for free, since the game redefines those per theme.
+The SCSS-colours row is the one with real consequence: the panel is built from
+SCSS variables compiled at build time, so a player on a non-default theme gets a
+panel that does not follow the rest of their UI. Switching to
+`var(--accentColorNormal)` and friends fixes that for free, since the game
+redefines those per theme.
+
+The hover-film row has since been closed. `BulldozerMarquee` had five generic
+controls hovering at four different alpha values, all of them near-misses of the
+one vanilla uses; they now share a single `$hover-film` token set to the game's
+`--hoverColor`. The danger-red Bulldoze and Confirm buttons deliberately keep
+their own ramp — vanilla does the same for its dialog Yes/No buttons, which have
+a semantic colour rather than a neutral surface.
 
 ---
 
