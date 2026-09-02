@@ -344,6 +344,51 @@ another export.
 > / `toggle-on`, which is close to the case a single `tinted` SVG plus three CSS
 > rules would replace outright.
 
+## 7a. State changes must not be loads
+
+A trap worth its own section, because the symptom looks like an asset problem and
+is not. **[REPO]**
+
+Showing a second state by rewriting an `<img src>` makes cohtml fetch that URL
+over `coui://` and rasterise it on the frame the state changes. Until that
+finishes the element renders **empty** — measured here at one to two seconds of
+blank button on every first hover and first click.
+
+Three things that do *not* fix it, tried in this repo:
+
+- **Shrinking the files.** These were ~10KB SVGs. The cost is not size, it is that
+  the work is happening during the interaction.
+- **Reducing the canvas.** 256×256 → 64×64 changed nothing; a vector's viewBox is
+  not a resolution.
+- **Preloading at 1px.** Vectors are rasterised at the size they are drawn, so a
+  1rem warm-up produces a texture nobody wants. Preload at the real display size.
+
+Path complexity does add to it. An icon traced from a bitmap carries 130–245 draw
+commands where a hand-drawn glyph has a few dozen, and that is genuine
+rasterisation work stacked on top of the fetch.
+
+**The fix is to stop treating a state change as a load.** Mount every state at
+once, absolutely positioned in one box, and switch with opacity:
+
+```scss
+.layer  { position: absolute; inset: 0; opacity: 0 }
+.layerShown { opacity: 1 }
+```
+
+**Hide with `opacity: 0`, never `display: none`.** A `display: none` element is
+not laid out and an engine is free never to fetch its image — which is exactly the
+lazy load being designed out. An `opacity: 0` element still has to be composited,
+so its image must be decoded whether or not it can be seen.
+
+That handles state changes but not first mount. A panel that unmounts when closed
+fetches all its icons the moment it opens, blank while it does. Preload them from
+a component that mounts with the game and never unmounts — a `GameTopLeft` button
+is the natural home — rendering each file once, invisible, out of flow, **at the
+size it will really be drawn**.
+
+None of this is needed for a single **tinted** SVG (§7), which has no second file
+to load. It is the price of one-file-per-state.
+
 ## 8. Serving icons
 
 Two routes, and they solve different problems.
@@ -388,6 +433,8 @@ match vanilla's line weight.
 - [ ] Selected = the right blue for the component (accent ramp vs `--selectedColor`)
 - [ ] Selected state **inverts text** to the `--selectedTextColor*` ramp
 - [ ] Single tinted SVG considered before shipping an off/on pair
+- [ ] Multi-file states **stacked and opacity-switched**, never `src`-swapped (§7a)
+- [ ] Icons preloaded at real display size from an always-mounted component (§7a)
 - [ ] Checked the Unified Icon Library first
 
 ## 10. Audit of this repo

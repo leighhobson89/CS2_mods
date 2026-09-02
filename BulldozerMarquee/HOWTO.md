@@ -321,6 +321,44 @@ I pointing at". The toolbar button in `mod-button.tsx` follows the same rule and
 needs no on-hover artwork, since the active state is already drawn in the vanilla
 selected style.
 
+### Why the icons are stacked, not swapped
+
+The obvious way to show three states is one `<img>` whose `src` is rewritten. It
+produces a visible fault: swapping to a URL that has never been displayed makes
+cohtml fetch it over `coui://` and rasterise it *on the frame the pointer
+arrives*, and the element renders empty until that finishes. On these icons that
+was a one-to-two second hole where the artwork should be, every first hover and
+first click.
+
+File size is not the cause and shrinking them does not fix it — the SVGs are
+around 10KB each. The cost is that the work happens at all, at the worst possible
+moment. Being traced rather than drawn does not help: each icon carries 130-245
+draw commands where a hand-drawn glyph would have a few dozen, so there is real
+rasterisation to do on top of the fetch.
+
+`StatefulIcon` removes the load from the interaction entirely. All three states
+are mounted from the start, absolutely positioned in the same box, and the state
+change is a pure opacity flip — the artwork is already fetched, decoded and on the
+GPU long before anyone points at it. **The layers hide with `opacity: 0`, never
+`display: none`:** a `display: none` element is not laid out and an engine is free
+never to fetch its image, which is precisely the lazy load being avoided.
+
+That covers state changes but not first mount, and the panel is unmounted while
+the tool is off — so the first time it opens is the moment nine mode icons get
+fetched, with the mode bar blank while it happens. `IconPreloader` closes that: it
+renders every file once, invisible and out of flow, from `mod-button.tsx`, which
+`GameTopLeft` mounts when the game loads and never removes. Its images are sized
+to match the real ones rather than shrunk to a pixel — these are vectors, and
+cohtml rasterises at the size drawn, so a 1rem warm-up would prove the file is
+fetchable without producing the texture actually needed.
+
+The toolbar button passes its artwork to the vanilla `Button` as **children**
+rather than as the `src` prop, so the same stacking applies there. That is not new
+ground — the mode bar has always rendered its icons as children of a vanilla
+`Button`; `variant` styles the button chrome, not its contents.
+
+### Hover tracking
+
 Hover is tracked as one `hoveredMode` value rather than a flag per button. cohtml
 does not reliably deliver a `mouseleave` when an element is *covered* mid-hover,
 and both the drag shield and the confirm scrim do exactly that — with independent

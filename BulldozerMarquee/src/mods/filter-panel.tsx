@@ -21,7 +21,8 @@ import {
     toggleSfx,
 } from "./bindings";
 import { ALL_FILTERS, FILTERS } from "./filters";
-import { getMode, getModeIcon, MODES } from "./modes";
+import { getMode, getModeIconStates, MODES } from "./modes";
+import { StatefulIcon } from "./stateful-icon";
 import styles from "./filter-panel.module.scss";
 
 interface DragOrigin {
@@ -251,9 +252,11 @@ export const BulldozerMarqueePanel = () => {
                                         selected={active}
                                         onSelect={() => setMode(definition.value)}
                                     >
-                                        <img
+                                        <StatefulIcon
                                             className={styles.modeIcon}
-                                            src={getModeIcon(definition, active, hovered)}
+                                            states={getModeIconStates(definition)}
+                                            active={active}
+                                            hovered={hovered}
                                         />
                                     </Button>
                                 </div>

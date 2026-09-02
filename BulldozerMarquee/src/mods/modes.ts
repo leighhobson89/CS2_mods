@@ -7,6 +7,7 @@ import marqueeSelectedIcon from "../../icon/marquee-selected.svg";
 import polygonIcon from "../../icon/polygonal.svg";
 import polygonHoverIcon from "../../icon/polygonal-hover.svg";
 import polygonSelectedIcon from "../../icon/polygonal-selected.svg";
+import { IconStates } from "./stateful-icon";
 
 /**
  * Mirrors the SelectionMode enum in SelectionMode.cs.
@@ -37,7 +38,7 @@ export const MODES: readonly ModeDefinition[] = [
     {
         value: 0,
         label: "Marquee",
-        tooltip: "Marquee — drag a box to select",
+        tooltip: "Marquee — Drag a box to select",
         hint: "Drag a box over the map to select.",
         icon: marqueeIcon,
         hoverIcon: marqueeHoverIcon,
@@ -46,8 +47,8 @@ export const MODES: readonly ModeDefinition[] = [
     {
         value: 2,
         label: "Polygon",
-        tooltip: "Polygon — click out corners, click the first one again to close. Right click removes the last corner.",
-        hint: "Click to place corners, then click the first one again to close.",
+        tooltip: "Polygon — Click corners, click the first one again to close. Right click removes the last corner.",
+        hint: "Click to place corners, until returning to the first one.",
         icon: polygonIcon,
         hoverIcon: polygonHoverIcon,
         selectedIcon: polygonSelectedIcon,
@@ -55,7 +56,7 @@ export const MODES: readonly ModeDefinition[] = [
     {
         value: 1,
         label: "Freeform",
-        tooltip: "Freeform — draw a lasso to select",
+        tooltip: "Freeform — Draw a lasso to select",
         hint: "Draw a loop around what you want to select.",
         icon: freeformIcon,
         hoverIcon: freeformHoverIcon,
@@ -67,15 +68,24 @@ export const MODES: readonly ModeDefinition[] = [
 export const getMode = (value: number): ModeDefinition =>
     MODES.find((definition) => definition.value === value) ?? MODES[0];
 
-/** Icon precedence for a mode button: selected beats hovered beats resting. */
-export const getModeIcon = (
-    definition: ModeDefinition,
-    active: boolean,
-    hovered: boolean,
-): string => {
-    if (active) {
-        return definition.selectedIcon;
-    }
+/**
+ * A mode's three states in the shape <StatefulIcon> wants. It takes all three
+ * rather than picking one because every state is mounted at once — see
+ * stateful-icon.tsx for why that matters.
+ */
+export const getModeIconStates = (definition: ModeDefinition): IconStates => ({
+    rest: definition.icon,
+    hover: definition.hoverIcon,
+    active: definition.selectedIcon,
+});
 
-    return hovered ? definition.hoverIcon : definition.icon;
-};
+/**
+ * Every image any mode button can show. Fed to the preloader so the panel's icons
+ * are already resident the first time it is opened, rather than being fetched
+ * while the player is looking at the button.
+ */
+export const ALL_MODE_ICONS: readonly string[] = MODES.flatMap((definition) => [
+    definition.icon,
+    definition.hoverIcon,
+    definition.selectedIcon,
+]);
