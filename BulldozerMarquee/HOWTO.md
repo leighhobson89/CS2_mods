@@ -303,8 +303,61 @@ The numbering is the wire format for the `SetMode` trigger, so the two files hav
 to be edited together. `SetMode` always seeds `Marquee` on create; there is no
 saved mode to restore.
 
+**Button order comes from the array, not the numbering.** Polygon is value `2`
+because it was appended to the enum, but it sits second in `MODES` because that is
+where it belongs on screen. Keeping those two independent is what lets a mode be
+inserted into the bar without renumbering the wire format.
+
+Each mode also carries its own `hint`, the line shown under the actions row while
+nothing is selected. It is per-mode data rather than a ternary in the panel so
+that adding a mode cannot leave a stale hint behind.
+
+Switching mode calls `CancelGesture` before `ClearSelection`. A gesture belongs to
+the mode that started it, and half a polygon left standing would be reinterpreted
+by whichever mode was switched to.
+
 Switching mode clears the selection, since carrying one across would leave the
 player holding a selection they can no longer see how they made.
+
+### Polygon
+
+Click-driven, not drag-driven, and that is the whole reason it takes its own path
+through `OnUpdate` rather than being threaded through
+`BeginDrag`/`UpdateDrag`/`EndDrag`. There is no held button, no mouse-up to wait
+for, and the preview is rebuilt on a click rather than on every frame the cursor
+moves — the two gestures share nothing but `m_Path`, so folding them together
+would have meant a mode test inside each of those three methods.
+
+`m_PolygonActive` is deliberately separate from `m_Dragging` for the same reason:
+nothing about a held mouse button applies.
+
+- **Apply** places a vertex. Applying on the first vertex again closes the loop,
+  but only once there are three vertices, so the second click of a small outline
+  cannot shut it by accident.
+- **Cancel** steps back one vertex. On the last remaining vertex there is nothing
+  to step back to, so the gesture is abandoned and the selection dropped. With no
+  outline in progress it falls through to the same escalation the drag modes use —
+  drop the selection, then leave the tool — so cancel never stops being a way out.
+
+`pathVertexCount` is mode-aware: the lasso's vertices are the committed trail
+*plus the cursor*, which is what closes its loop, while the polygon's are only the
+committed ones. Its region is decided by the clicks, not by where the cursor
+happens to be resting. That one property is what lets `PathContains`,
+`UpdatePathBounds` and `HasValidRegion` serve both modes unchanged — the lasso
+needs two committed vertices to make a triangle, the polygon needs three.
+
+The closing target's radius is a fraction of the camera's distance to the first
+vertex rather than a constant, because the tolerance is in world metres while the
+player is aiming in screen pixels. A fixed radius would be an enormous target
+zoomed in and a sub-pixel one zoomed out — and zoomed out is exactly where a large
+outline gets drawn. `IsOnFirstVertex` compares flat, on x and z only: the click
+lands on the terrain and the vertex was recorded on it, but on a slope the two can
+differ in height by more than the radius, which would make the loop refuse to
+close on the terrain where an outline is hardest to draw in the first place.
+
+The ring is drawn only once closing is possible, so the ring appearing *is* the
+cue that the loop can be shut, and its radius is the click tolerance rather than a
+decorative size — what is shown is exactly what can be hit.
 
 ### Freeform (lasso)
 

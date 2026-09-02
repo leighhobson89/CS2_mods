@@ -3,10 +3,11 @@ namespace BulldozerMarquee
     /// <summary>
     /// How the player draws a selection.
     /// <para>
-    /// The numeric values are persisted in the settings file and sent over the
-    /// "SetMode" trigger, so they are a stored contract: renumbering them would
-    /// silently change what a returning player's saved mode means. Append new modes,
-    /// never reorder.
+    /// The numeric values are the wire format for the "SetMode" trigger, so
+    /// src/mods/modes.ts mirrors this list and the two have to be edited together.
+    /// They are no longer persisted, so the numbering is not a stored contract —
+    /// but the order the buttons appear in is decided by the MODES array on the
+    /// TypeScript side, not here, so there is still never a reason to renumber.
     /// </para>
     /// </summary>
     public enum SelectionMode
@@ -14,7 +15,14 @@ namespace BulldozerMarquee
         /// <summary>Drag a camera-aligned box. The mode everything else is built for.</summary>
         Marquee = 0,
 
-        /// <summary>Reserved. Selects nothing yet.</summary>
+        /// <summary>Drag a freehand loop; the cursor closes it back to the start.</summary>
         Freeform = 1,
+
+        /// <summary>
+        /// Click out an outline vertex by vertex, closing it by clicking the first
+        /// vertex again. Unlike the other two this is not a drag at all, which is why
+        /// it takes its own input path in the tool system.
+        /// </summary>
+        Polygon = 2,
     }
 }

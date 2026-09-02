@@ -153,14 +153,33 @@ namespace BulldozerMarquee
         {
             // Anything unrecognised falls back to the mode that actually works,
             // rather than leaving the tool inert with no way to tell why.
-            SelectionMode selected = mode == (int)SelectionMode.Freeform
-                ? SelectionMode.Freeform
-                : SelectionMode.Marquee;
+            SelectionMode selected;
+
+            switch (mode)
+            {
+                case (int)SelectionMode.Freeform:
+                    selected = SelectionMode.Freeform;
+                    break;
+
+                case (int)SelectionMode.Polygon:
+                    selected = SelectionMode.Polygon;
+                    break;
+
+                default:
+                    selected = SelectionMode.Marquee;
+                    break;
+            }
 
             if ((SelectionMode)m_Mode.value == selected)
             {
                 return;
             }
+
+            // A gesture in progress belongs to the mode that started it: half a
+            // polygon left standing would be reinterpreted by whichever mode is
+            // switched to. Dropped before the selection, since abandoning the gesture
+            // is what makes dropping the selection unambiguous.
+            m_Tool.CancelGesture();
 
             // Switching mode abandons whatever the old one had picked out; carrying a
             // marquee selection into freeform would be selection the player can no

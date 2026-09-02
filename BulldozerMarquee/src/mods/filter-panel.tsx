@@ -21,7 +21,7 @@ import {
     toggleSfx,
 } from "./bindings";
 import { ALL_FILTERS, FILTERS } from "./filters";
-import { MARQUEE_MODE, MODES } from "./modes";
+import { getMode, MODES } from "./modes";
 import styles from "./filter-panel.module.scss";
 
 interface DragOrigin {
@@ -361,11 +361,7 @@ export const BulldozerMarqueePanel = () => {
                             </Button>
                         </div>
                     ) : (
-                        <div className={styles.hint}>
-                            {mode === MARQUEE_MODE
-                                ? "Drag a box over the map to select."
-                                : "Draw a loop around what you want to select."}
-                        </div>
+                        <div className={styles.hint}>{getMode(mode).hint}</div>
                     )}
                 </div>
             </div>

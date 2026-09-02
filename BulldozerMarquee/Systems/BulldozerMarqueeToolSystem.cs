@@ -90,6 +90,24 @@ namespace BulldozerMarquee
         /// <summary>Metres the cursor must travel before the lasso commits a vertex.</summary>
         private const float MinVertexDistanceSq = 9f;
 
+        /// <summary>Vertices below which a polygon cannot enclose anything.</summary>
+        private const int MinPolygonVertices = 3;
+
+        /// <summary>
+        /// The closing target's radius as a fraction of the camera's distance to the
+        /// first vertex, with a floor and ceiling in metres.
+        /// <para>
+        /// Scaled rather than fixed because the tolerance is in world metres while the
+        /// player is aiming in screen pixels. A fixed radius is a huge target zoomed
+        /// in and a sub-pixel one zoomed out - and zoomed out is exactly where a large
+        /// polygon gets drawn, so a constant would break closing at the zoom level
+        /// that needs it most.
+        /// </para>
+        /// </summary>
+        private const float CloseRadiusFraction = 0.014f;
+        private const float MinCloseRadius = 4f;
+        private const float MaxCloseRadius = 140f;
+
         /// <summary>Ignore sub-centimetre jitter so a still mouse triggers no rescan.</summary>
         private const float CursorEpsilonSq = 0.01f;
 
@@ -124,6 +142,14 @@ namespace BulldozerMarquee
         private const int MaxDrawnMarkers = 1000;
 
         private bool m_Dragging;
+
+        /// <summary>
+        /// True while a polygon outline is being clicked out. Distinct from
+        /// <see cref="m_Dragging"/>: no button is held, so there is no mouse-up to end
+        /// it - only clicking the first vertex again, or cancelling.
+        /// </summary>
+        private bool m_PolygonActive;
+
         private float3 m_DragStart;
         private MarqueeArea m_Area;
 
@@ -318,6 +344,7 @@ namespace BulldozerMarquee
             // cursor matters just as much: leaving a bulldozer pointer on the default
             // tool would be a mess.
             m_Dragging = false;
+            m_PolygonActive = false;
             m_Path.Clear();
             BulldozeCursor.Reset();
             ClearSelection();
@@ -339,6 +366,27 @@ namespace BulldozerMarquee
             }
 
             bool hasGround = GetRaycastResult(out Entity _, out RaycastHit hit);
+
+            // The polygon is click-driven rather than drag-driven, so it handles input
+            // on its own terms. The two gestures share nothing but the vertex list -
+            // no held button, no mouse-up to wait for, and a preview rebuilt per click
+            // rather than per frame - so folding it into BeginDrag/UpdateDrag/EndDrag
+            // would mean a mode test inside each of them.
+            if (mode == SelectionMode.Polygon)
+            {
+                UpdatePolygon(hasGround, hit.m_HitPosition);
+
+                // Re-asserted every frame for the same reason as the drag: the UI
+                // layer reports its own cursor whenever hover state is recalculated,
+                // which silently overwrites a one-shot call.
+                if (m_PolygonActive)
+                {
+                    BulldozeCursor.Apply();
+                }
+
+                DrawOverlays();
+                return inputDeps;
+            }
 
             if (cancelAction.WasPressedThisFrame())
             {
@@ -388,6 +436,169 @@ namespace BulldozerMarquee
             DrawOverlays();
 
             return inputDeps;
+        }
+
+        /// <summary>
+        /// One frame of the outline gesture: apply drops a vertex, applying on the
+        /// first vertex again closes the loop, and cancel takes the last vertex back
+        /// off.
+        /// </summary>
+        private void UpdatePolygon(bool hasGround, float3 position)
+        {
+            // The cursor is the rubber band's free end, so it is tracked every frame
+            // whether or not anything was clicked.
+            if (hasGround)
+            {
+                m_Cursor = position;
+            }
+
+            if (cancelAction.WasPressedThisFrame())
+            {
+                UndoPolygonVertex();
+                return;
+            }
+
+            if (!applyAction.WasPressedThisFrame() || !hasGround)
+            {
+                return;
+            }
+
+            if (!m_PolygonActive)
+            {
+                // Starting an outline drops whatever the last one caught, highlights
+                // and all, so the only thing on screen is the one being drawn.
+                ClearSelection();
+
+                m_PolygonActive = true;
+                m_Path.Clear();
+                m_Path.Add(position);
+                return;
+            }
+
+            // Clicking back on the first vertex is the close gesture. It is only
+            // offered once there are enough vertices to enclose anything, so the
+            // second click of a small outline cannot shut it by accident.
+            if (m_Path.Length >= MinPolygonVertices && IsOnFirstVertex(position))
+            {
+                ClosePolygon();
+                return;
+            }
+
+            if (m_Path.Length >= MaxPathVertices)
+            {
+                return;
+            }
+
+            m_Path.Add(position);
+
+            // Refreshed per click rather than per frame: a click is the only thing
+            // that changes the outline, so moving the cursor costs nothing. Below
+            // three vertices this collects nothing, which is correct - there is no
+            // area yet.
+            RebuildSelection();
+        }
+
+        /// <summary>
+        /// Cancel during an outline steps back one vertex. On the last remaining
+        /// vertex there is nothing to step back to, so the gesture is abandoned
+        /// outright and the selection dropped.
+        /// <para>
+        /// With no outline in progress it falls through to the same escalation the
+        /// drag modes use - drop the selection, then leave the tool - so cancel never
+        /// stops being a way out.
+        /// </para>
+        /// </summary>
+        private void UndoPolygonVertex()
+        {
+            if (!m_PolygonActive)
+            {
+                if (m_Selection.Length > 0)
+                {
+                    ClearSelection();
+                }
+                else
+                {
+                    m_ToolSystem.activeTool = m_DefaultToolSystem;
+                }
+
+                return;
+            }
+
+            if (m_Path.Length <= 1)
+            {
+                CancelPolygon();
+                return;
+            }
+
+            m_Path.Length = m_Path.Length - 1;
+            RebuildSelection();
+        }
+
+        private void CancelPolygon()
+        {
+            m_PolygonActive = false;
+            m_Path.Clear();
+            BulldozeCursor.Reset();
+            ClearSelection();
+        }
+
+        /// <summary>
+        /// Commits the outline. The drawn line goes away afterwards for the same
+        /// reason the marquee box does: it is a gesture, not something that stays on
+        /// screen once it has been answered. The rings on the selection are what is
+        /// left behind.
+        /// </summary>
+        private void ClosePolygon()
+        {
+            m_PolygonActive = false;
+            BulldozeCursor.Reset();
+
+            // Rebuilt rather than trusted: the preview was last refreshed on the
+            // previous click, and this is the moment what gets highlighted has to be
+            // exactly what the outline encloses.
+            RebuildSelection();
+
+            Mod.Log.Info(
+                $"Committed {mode} selection: {m_Selection.Length} entities"
+                + $"{(m_SelectionClamped ? $" (clamped at {MaxSelection})" : string.Empty)}"
+                + $", filters={filters}, polygonVertices={m_Path.Length}.");
+
+            SetHighlighted(true);
+            m_SelectionHighlighted = true;
+
+            m_Path.Clear();
+        }
+
+        /// <summary>
+        /// Whether a click lands on the closing target at the first vertex.
+        /// <para>
+        /// Compared flat, on x and z only. The click lands on the terrain and the
+        /// vertex was recorded on it, but on a slope the two can differ in height by
+        /// more than the radius - which would make the loop refuse to close on
+        /// exactly the terrain where an outline is hardest to draw.
+        /// </para>
+        /// </summary>
+        private bool IsOnFirstVertex(float3 position)
+        {
+            float3 first = m_Path[0];
+            float radius = GetCloseRadius(first);
+            float2 delta = new float2(position.x - first.x, position.z - first.z);
+
+            return math.lengthsq(delta) <= radius * radius;
+        }
+
+        /// <summary>
+        /// Abandons an outline or drag in progress, without touching the committed
+        /// selection. Called when the mode changes out from under a gesture, which
+        /// would otherwise leave half a polygon on screen being reinterpreted by
+        /// whichever mode the player just switched to.
+        /// </summary>
+        public void CancelGesture()
+        {
+            m_Dragging = false;
+            m_PolygonActive = false;
+            m_Path.Clear();
+            BulldozeCursor.Reset();
         }
 
         private void BeginDrag(float3 position)
@@ -488,11 +699,17 @@ namespace BulldozerMarquee
         }
 
         /// <summary>
-        /// The lasso's vertices are the committed trail plus the cursor, which closes
-        /// the loop back to the start. Exposing it this way avoids rebuilding a list
-        /// every frame just to append one moving point.
+        /// How many vertices the current path-based region has.
+        /// <para>
+        /// The lasso's are the committed trail plus the cursor, which closes the loop
+        /// back to the start; exposing it this way avoids rebuilding a list every
+        /// frame just to append one moving point. The polygon's are only the
+        /// committed ones - its region is decided by the clicks, not by where the
+        /// cursor happens to be resting.
+        /// </para>
         /// </summary>
-        private int pathVertexCount => m_Path.Length + 1;
+        private int pathVertexCount =>
+            mode == SelectionMode.Polygon ? m_Path.Length : m_Path.Length + 1;
 
         private float3 GetPathVertex(int index)
         {
@@ -507,7 +724,11 @@ namespace BulldozerMarquee
                 return m_Area.isValid;
             }
 
-            return m_Path.Length >= 2 && math.all(m_PathMax - m_PathMin >= MinimumExtent);
+            // The lasso is closed by the cursor, so two committed vertices already
+            // make a triangle. The polygon has no cursor vertex, so it needs three.
+            int minimum = mode == SelectionMode.Polygon ? MinPolygonVertices : 2;
+
+            return m_Path.Length >= minimum && math.all(m_PathMax - m_PathMin >= MinimumExtent);
         }
 
         private void UpdatePathBounds()
@@ -586,10 +807,38 @@ namespace BulldozerMarquee
         /// </summary>
         private float GetCameraYaw()
         {
-            Camera camera = m_CameraUpdateSystem != null ? m_CameraUpdateSystem.activeCamera : null;
-            camera = camera != null ? camera : Camera.main;
+            Camera camera = GetCamera();
 
             return camera != null ? camera.transform.eulerAngles.y * Mathf.Deg2Rad : 0f;
+        }
+
+        /// <summary>
+        /// Falls back to the main camera because the active viewer is null for a frame
+        /// or two around loading screens.
+        /// </summary>
+        private Camera GetCamera()
+        {
+            Camera camera = m_CameraUpdateSystem != null ? m_CameraUpdateSystem.activeCamera : null;
+
+            return camera != null ? camera : Camera.main;
+        }
+
+        /// <summary>
+        /// How close a click has to land to the first vertex to close the loop, in
+        /// metres. See <see cref="CloseRadiusFraction"/> for why it is not a constant.
+        /// </summary>
+        private float GetCloseRadius(float3 vertex)
+        {
+            Camera camera = GetCamera();
+
+            if (camera == null)
+            {
+                return MinCloseRadius;
+            }
+
+            float distance = math.distance((float3)camera.transform.position, vertex);
+
+            return math.clamp(distance * CloseRadiusFraction, MinCloseRadius, MaxCloseRadius);
         }
 
         /// <summary>
@@ -1053,7 +1302,12 @@ namespace BulldozerMarquee
         {
             bool drawRegion = m_Dragging && HasValidRegion();
 
-            if (!drawRegion && m_SelectionPositions.Length == 0)
+            // Drawn from the very first vertex rather than from a valid region: an
+            // outline is worth showing long before it encloses anything, and the line
+            // following the cursor is the only feedback that a click registered.
+            bool drawPolygon = m_PolygonActive && m_Path.Length > 0;
+
+            if (!drawRegion && !drawPolygon && m_SelectionPositions.Length == 0)
             {
                 return;
             }
@@ -1064,7 +1318,11 @@ namespace BulldozerMarquee
             // them from the main thread without completing first is a data race.
             dependencies.Complete();
 
-            if (drawRegion && mode == SelectionMode.Marquee)
+            if (drawPolygon)
+            {
+                DrawPolygonOutline(buffer);
+            }
+            else if (drawRegion && mode == SelectionMode.Marquee)
             {
                 // Four plain lines, no fill inside the box: the marquee should frame
                 // what is underneath it rather than tint it.
@@ -1104,6 +1362,41 @@ namespace BulldozerMarquee
                     new float2(0f, 1f),
                     m_SelectionPositions[i],
                     MarkerDiameter);
+            }
+        }
+
+        /// <summary>
+        /// The outline as it is being clicked out: the placed edges and the rubber
+        /// band to the cursor solid, since the player is putting those down, and the
+        /// chord back to the start dashed - the one edge they have not drawn, and the
+        /// one that shows what clicking the first vertex again would shut.
+        /// </summary>
+        private void DrawPolygonOutline(OverlayRenderSystem.Buffer buffer)
+        {
+            for (int i = 0; i < m_Path.Length - 1; i++)
+            {
+                DrawRegionEdge(buffer, m_Path[i], m_Path[i + 1]);
+            }
+
+            float3 first = m_Path[0];
+
+            DrawRegionEdge(buffer, m_Path[m_Path.Length - 1], m_Cursor);
+            DrawClosingEdge(buffer, m_Cursor, first);
+
+            // The closing target, drawn only once closing is actually possible - the
+            // ring appearing is itself the cue that the loop can now be shut. Its
+            // radius is the click tolerance rather than a decorative size, so what is
+            // shown is exactly what can be hit.
+            if (m_Path.Length >= MinPolygonVertices)
+            {
+                buffer.DrawCircle(
+                    kMarkerColor,
+                    kTransparent,
+                    MarkerThickness,
+                    OverlayRenderSystem.StyleFlags.Projected,
+                    new float2(0f, 1f),
+                    first,
+                    GetCloseRadius(first) * 2f);
             }
         }
 
