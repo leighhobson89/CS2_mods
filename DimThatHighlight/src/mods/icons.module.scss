@@ -1,0 +1,38 @@
+// Icon state machinery. See stateful-icon.tsx for why this exists at all.
+
+// The box a StatefulIcon occupies. Sized by the caller's class — every layer
+// inside is absolutely positioned, so without an explicit size from outside this
+// collapses to nothing.
+.stack {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+// One state's artwork. All of them are in the DOM from the moment the icon mounts,
+// which is the entire point: cohtml fetches and rasterises each file once, up
+// front, instead of on the frame the state changes.
+.layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+
+    // Opacity, deliberately — not display:none and not visibility:hidden. A
+    // display:none element is not laid out and an engine is free never to fetch its
+    // image at all, which is exactly the lazy load this component exists to avoid.
+    // An opacity:0 element still has to be composited, so the image must be decoded
+    // and uploaded whether it can be seen or not.
+    opacity: 0;
+}
+
+.layerShown {
+    opacity: 1;
+}
+
+// Glyph inside the vanilla floating toolbar button. 36rem is what vanilla leaves:
+// --floatingToggleSize is 40rem and .button_ke4 pads it by var(--gap2) all round.
+.buttonIcon {
+    width: 36rem;
+    height: 36rem;
+}

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Resting state of the toolbar button.
+
+  A roughly-drawn irregular block with three highlight strokes ringing it — the
+  thing the mod exists to recolour.
+
+  The three strokes are yellow, magenta and red rather than three blues: on this
+  icon the colours ARE the subject matter, and a monochrome glyph would be a picture
+  of the problem rather than of the fix. Everything else stays on the vanilla ramp —
+  the core block is --accentColorDarker, and the state progression works down the
+  dark end of the blue ramp.
+
+  The vanilla floating button paints ITSELF from the accent ramp (.button_ke4 is
+  #4bc3f1, going to #7ad3f5 on hover and #9ee2fc when selected), so the glyph sits on
+  saturated and dark colours throughout — against a light blue background, contrast
+  comes from going darker, not brighter.
+
+  Gameface needs explicit width/height and does not implement the whole SVG spec, so
+  this is flat paths with attribute styling: no <style>, no filters, no gradients.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="64px" height="64px" viewBox="0 0 64 64" version="1.1">
+  <g fill="none" stroke-linejoin="round" stroke-linecap="round" stroke-width="3">
+    <!-- red -->
+    <path stroke="#d4231f" d="M 12.5 8.5 L 33.5 6.5 L 55.5 10.5 L 57.5 32 L 54.5 54.5 L 32 57.5 L 10.5 53.5 L 6.5 31 Z"/>
+    <!-- magenta -->
+    <path stroke="#c4188c" d="M 16 13.5 L 33 11.5 L 50.5 15 L 52.5 32 L 50 50 L 32 52.5 L 14.5 49 L 11.5 31.5 Z"/>
+    <!-- yellow -->
+    <path stroke="#d8a800" d="M 20 19 L 32.5 17 L 45 20 L 47 32 L 45 45 L 32 47.5 L 19 44.5 L 17 31.5 Z"/>
+  </g>
+  <path fill="#2e3c5b" d="M 25 25.5 L 33 23.5 L 40.5 26 L 42 32 L 40 39.5 L 32 41.5 L 24.5 39 L 23.5 31.5 Z"/>
+</svg>

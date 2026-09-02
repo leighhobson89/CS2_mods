@@ -1,0 +1,88 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>DimThatHighlight</AssemblyName>
+    <RootNamespace>DimThatHighlight</RootNamespace>
+    <LangVersion>9.0</LangVersion>
+    <Configurations>Debug;Release</Configurations>
+
+    <!-- Mod metadata the ModPublisher reads when publishing to Paradox Mods. -->
+    <PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
+  </PropertyGroup>
+
+  <Import Project="$(CSII_TOOLPATH)\Mod.props" />
+
+  <ItemGroup>
+    <Reference Include="Game">
+      <HintPath>$(ManagedPath)\Game.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Colossal.Core">
+      <HintPath>$(ManagedPath)\Colossal.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Colossal.Logging">
+      <HintPath>$(ManagedPath)\Colossal.Logging.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Colossal.UI.Binding">
+      <HintPath>$(ManagedPath)\Colossal.UI.Binding.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- ModSetting persistence: AssetDatabase.global.LoadSettings / [FileLocation]. -->
+    <Reference Include="Colossal.IO.AssetDatabase">
+      <HintPath>$(ManagedPath)\Colossal.IO.AssetDatabase.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- IDictionarySource, for the options page's English strings. -->
+    <Reference Include="Colossal.Localization">
+      <HintPath>$(ManagedPath)\Colossal.Localization.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Unity.Entities">
+      <HintPath>$(ManagedPath)\Unity.Entities.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Unity.Collections">
+      <HintPath>$(ManagedPath)\Unity.Collections.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Unity.Mathematics">
+      <HintPath>$(ManagedPath)\Unity.Mathematics.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- UnityEngine.Color and Mathf, the types RenderingSettingsData is written in. -->
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ManagedPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!--
+      OutlineDiagnostics only. CustomPassVolume and CustomPass live here, and walking
+      them is the only way to reach the OutlinesWorldUIPass instance and read the
+      fullscreen material's shader property table.
+    -->
+    <Reference Include="Unity.RenderPipelines.Core.Runtime">
+      <HintPath>$(ManagedPath)\Unity.RenderPipelines.Core.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Unity.RenderPipelines.HighDefinition.Runtime">
+      <HintPath>$(ManagedPath)\Unity.RenderPipelines.HighDefinition.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Import Project="$(CSII_TOOLPATH)\Mod.targets" />
+
+</Project>

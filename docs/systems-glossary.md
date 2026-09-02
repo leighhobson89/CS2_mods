@@ -220,6 +220,79 @@ m_IconCommandSystem.AddCommandBufferWriter(cleanHandle);
 Dependency = cleanHandle;
 ```
 
+### RenderingSettingsData — the hover/error/warning outline colours
+
+**Not a system.** A five-field ECS **singleton** carrying every colour the game
+tints a highlighted object with. Obtained the way `BatchDataSystem` obtains it:
+
+```csharp
+m_Query = GetEntityQuery(ComponentType.ReadWrite<RenderingSettingsData>());
+if (m_Query.TryGetSingleton(out RenderingSettingsData data)) { ... m_Query.SetSingleton(data); }
+```
+
+`ReadWrite` is required to call `SetSingleton`; the vanilla systems build the same
+query `ReadOnly`. Despite living in `Game.Prefabs`, the entity carrying it is an
+ordinary one — no prefab-inclusion query option is needed to reach it.
+
+| Field | Type | Confidence | Behaviour |
+|---|---|---|---|
+| `m_HoveredColor` | `Color` | **[GAME]** RGB, **[GAME]** alpha does nothing | The bright blue outline under the cursor. Stock value `(0.5, 0.5, 1.0, 0.1)`. Changing RGB changes the outline; changing alpha has **no visible effect at any value**. |
+| `m_OverrideColor` | `Color` | **[SDK]** | Used for entities carrying `Game.Tools.Override`. Stock `(1, 1, 1, 0.1)`. |
+| `m_WarningColor` | `Color` | **[SDK]** | `Game.Tools.Warning`. Stock `(1, 1, 0.5, 0.1)`. |
+| `m_ErrorColor` | `Color` | **[SDK]** | `Game.Tools.Error`. Stock `(1, 0.5, 0.5, 0.1)`. |
+| `m_OwnerColor` | `Color` | **[SDK]** | A `Temp` entity with `TempFlags` bit `2048`. Stock `(0.5, 1, 0.5, 0.1)`. |
+
+The path from field to pixels: `BatchDataSystem.OnUpdate` reads the singleton every
+update into `BatchDataJob`, whose `UpdateObjectData` / `UpdateNetData` /
+`UpdateLaneData` choose one colour per entity in the precedence **error > warning >
+override > owner > hovered** and write it to the `OutlineColors` per-instance
+property — declared `_Outlines_Color`, a `float4`. `Game.Rendering.OutlinesWorldUIPass`,
+an HDRP `CustomPass`, draws the silhouette from that buffer.
+
+Four things that catch people out:
+
+- **Colours are stored gamma-space.** `BatchDataJob` calls `.linear` on the value
+  itself, so converting on the way in darkens everything.
+- **Alpha is not an opacity control** **[GAME]**. Every stock colour sits at `0.1`
+  alpha, which reads like a deliberate subtlety setting — it is not. Changing it has
+  no visible effect at any value, verified in game by
+  [DimThatHighlight](../DimThatHighlight). The likely reason is visible in the
+  pass: `OutlinesWorldUIPass.DrawOutlineMeshes` fills the whole silhouette into an
+  offscreen `R8G8B8A8_SRGB` buffer, and the fullscreen composite edge-detects over
+  it, so alpha most plausibly serves as the mask rather than a blend factor. **To
+  fade a highlight, scale its RGB toward black** — that is the only lever that moves,
+  and it works under every reading of the shader.
+- **The scope is wider than object outlines.** `AreaBorderRenderSystem` (district
+  and area borders) and `BuildingLotRenderSystem` (the lot outline under a building)
+  read the same five fields, so recolouring `m_HoveredColor` recolours those too.
+- **There is no "stop overriding" flag.** Unlike `PlanetarySystem.overrideTime` this
+  is a plain value: snapshot the original before the first write and restore it in
+  `OnDestroy`, or the change outlives the mod.
+
+`RenderingSettingsPrefab.Initialize` is the **only** writer in `Game.dll`, which is
+what makes overwriting the singleton safe — but it runs on every prefab
+initialisation, i.e. every world load, so a mod that wants its colour to survive
+loading a save has to re-assert it. Comparing before writing keeps that to one
+singleton read per frame.
+
+**Used by:** [DimThatHighlight](../DimThatHighlight) — writes `m_HoveredColor`
+from a palette panel, snapshots the stock value on first read, re-asserts on drift,
+and scales RGB rather than alpha for its strength control.
+
+**What is still unknown [?]:** whether `m_FullscreenOutline` exposes a dedicated
+intensity, width or threshold property that would beat scaling the colour. Its shader
+is compiled into an asset bundle, so this cannot be read statically — but a
+material's property table *is* enumerable at runtime
+(`Shader.GetPropertyCount`/`GetPropertyName`), and the pass instance is reachable by
+walking `Resources.FindObjectsOfTypeAll<CustomPassVolume>()` for an
+`OutlinesWorldUIPass`. `DimThatHighlight/OutlineDiagnostics.cs` does exactly that
+and logs the result.
+
+**Verified against:** decompiled `Game.dll` IL (`BatchDataSystem.OnUpdate`,
+`BatchDataJob.UpdateObjectData`, `RenderingSettingsPrefab..ctor`/`Initialize`) at the
+game version installed at the time of writing. Field layouts here are internal API
+with no stability guarantee — re-check after a patch.
+
 ### OverlayRenderSystem
 
 Shared gizmo buffer for lines, curves and circles. **[GUIDE]**

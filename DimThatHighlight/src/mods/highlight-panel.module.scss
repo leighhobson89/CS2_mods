@@ -1,0 +1,318 @@
+// CS2 scales its whole UI by the root font size, so vanilla styling is written in
+// rem (1rem is one pixel at the reference resolution). Using px here would leave the
+// panel the wrong size on every UI scale but the default.
+
+$text: #dbe3e9;
+$text-dim: #8b9aa6;
+$accent: #4ba7d8;
+$accent-bright: #7fc9ef;
+
+// Vanilla does not give a generic control its own hover colour — it lays a
+// translucent white film over whatever the control is already painted, which is what
+// makes one value correct on every background. These are the game's own
+// --hoverColor and --activeColor; see docs/ui-icon-standards.md.
+$hover-film: rgba(255, 255, 255, 0.1);
+$active-film: rgba(255, 255, 255, 0.2);
+
+// 16 swatches, 8 to a row. The palette shrank from 256 to 64 to 16 across three
+// passes, and each cut made it easier to use: the Strength slider already covers
+// "the same colour but darker", so rows of near-identical shades were answering a
+// question that was already answered better elsewhere.
+//
+// The grid no longer sets the panel's width. Sixteen small swatches would make for a
+// panel too narrow to explain itself in, so $panel-width is chosen for the prose and
+// the grid is centred inside it.
+$swatch-size: 22rem;
+$swatch-gap: 4rem;
+$swatch-columns: 8;
+$grid-width: $swatch-columns * $swatch-size + ($swatch-columns - 1) * $swatch-gap;
+$panel-width: 286rem;
+
+.panel {
+    // The Game host is the full-screen container, so unlike the toolbar icon this has
+    // to place itself. There is no GameBottomLeft mount point to append to. This is
+    // only the resting position — dragging the header applies a transform on top.
+    position: absolute;
+    left: 12rem;
+    bottom: 92rem;
+
+    // Mandatory. The Game host is a full-screen HUD layer with pointer-events none so
+    // the mouse reaches the 3D world; vanilla widgets opt back in via their own
+    // classes, and passing `theme` to a cs2/ui Button REPLACES that class. Without
+    // this the whole panel is click-through and every button looks dead.
+    pointer-events: auto;
+
+    // Below .dragShield, which has to receive the move events while dragging.
+    z-index: 10;
+
+    display: flex;
+    flex-direction: column;
+    width: $panel-width;
+
+    padding: 9rem;
+    border: 1rem solid rgba(255, 255, 255, 0.12);
+    border-radius: 4rem;
+    background-color: rgba(9, 15, 20, 0.93);
+    color: $text;
+    font-size: 13rem;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8rem;
+    padding-bottom: 6rem;
+    border-bottom: 1rem solid rgba(255, 255, 255, 0.1);
+
+    // The whole bar is the drag handle.
+    cursor: move;
+    user-select: none;
+}
+
+.title {
+    font-size: 13rem;
+    font-weight: 600;
+    letter-spacing: 0.5rem;
+    text-transform: uppercase;
+    color: $text-dim;
+}
+
+// Replaces the vanilla button class rather than sitting alongside it, so the
+// component keeps its click sounds and gamepad focus without also bringing the
+// padding and background of a full-size button.
+.closeButton {
+    padding: 0 4rem;
+    border: 0;
+    border-radius: 2rem;
+    background-color: transparent;
+    color: $text-dim;
+    font-size: 15rem;
+    line-height: 15rem;
+
+    &:hover {
+        color: $text;
+    }
+}
+
+// What the panel is for, in the panel. With only sixteen swatches there is room to
+// say it, and "the game rings things in bright blue and you can change that" is not
+// self-evident from a grid of colours.
+.intro {
+    margin-bottom: 9rem;
+    font-size: 11rem;
+    line-height: 15rem;
+    color: $text-dim;
+}
+
+// --- Palette ------------------------------------------------------------------
+
+.swatches {
+    display: flex;
+    flex-wrap: wrap;
+    width: $grid-width;
+
+    // The grid is exactly 8 swatches wide, so the row cannot be justified into place
+    // — it has to be sized into place, which is what $grid-width above is for. The
+    // panel is wider than that on purpose, so this centres inside it.
+    align-self: center;
+}
+
+.swatch {
+    position: relative;
+    box-sizing: border-box;
+    width: $swatch-size;
+    height: $swatch-size;
+    margin: 0 $swatch-gap $swatch-gap 0;
+
+    // A hairline dark border, not a light one: most of this palette is dark, and a
+    // light border would read as part of the colour on those swatches.
+    border: 1rem solid rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+
+    // No :nth-child rule to drop the trailing margin on each row's last swatch — the
+    // grid width already accounts for it and cohtml's :nth-child support is not worth
+    // relying on for layout.
+    &:hover {
+        border-color: rgba(255, 255, 255, 0.85);
+    }
+}
+
+// Two rings rather than one, so the marker is visible against both a black and a
+// white swatch: a white outer ring outside a dark inner one.
+.swatchSelected {
+    border-color: #0a0f14;
+    box-shadow: 0 0 0 2rem #ffffff;
+
+    // Lifted so its rings paint over the neighbouring swatches rather than under them.
+    z-index: 1;
+}
+
+
+// --- Strength slider ----------------------------------------------------------
+
+.sliderRow {
+    display: flex;
+    align-items: center;
+    margin-top: 8rem;
+}
+
+.sliderLabel {
+    flex: 0 0 auto;
+    margin-right: 8rem;
+    font-size: 11rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4rem;
+    color: $text-dim;
+}
+
+.sliderTrack {
+    position: relative;
+    flex: 1 1 auto;
+    height: 6rem;
+    border-radius: 3rem;
+    background-color: rgba(255, 255, 255, 0.14);
+    cursor: pointer;
+}
+
+.sliderFill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    border-radius: 3rem;
+    background-color: $accent;
+}
+
+.sliderHandle {
+    position: absolute;
+    top: 50%;
+    width: 12rem;
+    height: 12rem;
+
+    // Centred on its own position rather than offset by percentage, so the handle sits
+    // on the value at both ends of the track instead of drifting off it.
+    margin-left: -6rem;
+    margin-top: -6rem;
+
+    border: 1rem solid rgba(255, 255, 255, 0.8);
+    border-radius: 6rem;
+    background-color: $accent-bright;
+}
+
+.sliderValue {
+    flex: 0 0 auto;
+    width: 34rem;
+    margin-left: 8rem;
+    font-size: 11rem;
+    text-align: right;
+    color: $text-dim;
+}
+
+// --- Footer -------------------------------------------------------------------
+
+.footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 9rem;
+    padding-top: 8rem;
+    border-top: 1rem solid rgba(255, 255, 255, 0.1);
+}
+
+.preview {
+    display: flex;
+    align-items: center;
+}
+
+// Shows the colour AFTER Strength has been applied, which is the number that
+// matters — the swatch says what was picked, this says what gets drawn. Sat on a
+// dark ground rather than a checkerboard, because the value being previewed is now
+// an opaque colour rather than a translucent one.
+.previewFill {
+    width: 26rem;
+    height: 14rem;
+    margin-right: 8rem;
+    border: 1rem solid rgba(255, 255, 255, 0.25);
+}
+
+.previewHex {
+    font-size: 11rem;
+    letter-spacing: 0.5rem;
+    color: $text-dim;
+}
+
+// Carries a dot of the game's own highlight colour, so "what am I resetting to" is
+// visible rather than remembered. That colour is snapshotted from the running game
+// and is not one of the generated swatches, which is why it lives here and not as a
+// marker in the grid.
+.resetSwatch {
+    width: 10rem;
+    height: 10rem;
+    margin-right: 6rem;
+    border: 1rem solid rgba(255, 255, 255, 0.35);
+    border-radius: 2rem;
+}
+
+.resetButton {
+    display: flex;
+    align-items: center;
+    padding: 3rem 9rem;
+    border: 1rem solid rgba(255, 255, 255, 0.16);
+    border-radius: 3rem;
+    background-color: rgba(255, 255, 255, 0.06);
+    color: $text;
+    font-size: 11rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4rem;
+
+    &:hover {
+        border-color: rgba(255, 255, 255, 0.3);
+        background-color: $hover-film;
+    }
+
+    &:active {
+        background-color: $active-film;
+    }
+}
+
+// Gameface has no :disabled styling of its own here, and pressing Reset when nothing
+// has been changed is harmless — so this dims the button rather than blocking it.
+.resetButtonInactive {
+    border-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.03);
+    color: $text-dim;
+}
+
+.hint {
+    margin-top: 8rem;
+    font-size: 11rem;
+    line-height: 14rem;
+    color: $text-dim;
+}
+
+// --- Drag shield --------------------------------------------------------------
+
+// Covers the viewport only while something is being dragged, so mouse events keep
+// reaching the UI after the cursor leaves the panel. Transparent, and gone the
+// instant the button is released.
+.dragShield {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    // Above the panel, not below it. The panel moves with the cursor when the header
+    // is the thing being dragged, so if it paints on top it takes every mousemove the
+    // shield exists to receive and the drag dies within a few pixels.
+    z-index: 20;
+
+    pointer-events: auto;
+    cursor: move;
+}
+
+// The slider does not move the window, so the move cursor would be a lie.
+.dragShieldSlider {
+    cursor: pointer;
+}

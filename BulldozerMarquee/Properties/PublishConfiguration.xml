@@ -38,9 +38,6 @@ Trees, props, nodes, segments, buildings, surfaces and net lanes can each be inc
 
 All three are in Options &gt; Mods &gt; Bulldozer Marquee, and mirrored by checkboxes on the panel itself.
 
-## Notes
-
-The selector is a real game tool, not a UI overlay, so it respects your own key bindings, cancels whichever tool was active when you start it, and closes on Escape like every vanilla tool. Selection outlines are drawn as world geometry, so they drape over terrain instead of floating flat above a hillside.
 	</LongDescription>
 	<!--Thumbnail-->
 	<Thumbnail Value="Properties/Thumbnail.png" />

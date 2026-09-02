@@ -1,0 +1,67 @@
+﻿<Publish>
+	<!--Id must be set in order to update existed mod. it is not required for publishing mod for the first time-->
+	<ModId Value="157738" />
+	<!--Name of the mod to display to players-->
+	<DisplayName Value="Dim That Highlight" />
+	<!--Short description of the mod-->
+	<ShortDescription Value="Recolour the bright blue outline the game rings hovered assets with, and turn its strength down." />
+	<!--Long description of the mod. Single line or multi line. Supports minimal markdown subset-->
+	<LongDescription>
+Point at anything in Cities: Skylines II and the game rings it in a bright blue outline. It is useful, and it is loud — over a dense district, or when you are just moving the camera around, it is the first thing your eye goes to whether you asked for it or not.
+
+Dim That Highlight lets you pick what colour that outline is, and how hard it reads.
+
+## What it does
+
+- **Sixteen colours to choose from** — the twelve-hue colour wheel plus white, two greys and black. Everything is one click; there is nothing to type.
+- **A Strength slider** that takes the outline down from full to nothing. Pull it to zero and the hover highlight is switched off entirely.
+- **Changes apply immediately.** Move the slider and the next thing you point at is drawn the new way. No reload, no restart.
+
+## How to use it
+
+1. Click the mod's button in the top-left. The panel opens in the bottom-left corner — drag its title bar to move it anywhere you like.
+2. Click a colour, then pull **Strength** down until the highlight stops competing with your city.
+3. Close the panel. The colour keeps applying; the panel is only there when you want to change it.
+
+**Reset** puts the highlight back exactly the way the game draws it. The dot on that button is the game's own colour, read from your running game rather than hardcoded, so it is honest about what it is restoring. The same reset lives in Options &gt; Mods &gt; Dim That Highlight, in case you dim the highlight so far you cannot find anything to click.
+
+## What it affects
+
+The hover outline is one setting shared across the whole game, so this covers buildings, roads and other networks, network lanes, district and area borders, and the lot outline under a building. That is the same "you are pointing at this" signal throughout, which is why they move together.
+
+It does not touch the red error, yellow warning or green owner highlights — those are separate colours, and they are the ones you actually want to keep noticing.
+
+## Compatibility
+
+No Harmony patches and no replaced systems. The mod writes one value the game already reads every frame, and puts the original back when it unloads — so removing it leaves nothing behind.
+
+	</LongDescription>
+	<!--Thumbnail-->
+	<Thumbnail Value="shots/thumbnail.png" />
+	<!--Screenshot, can be set multiple times. Paths are relative to the project
+	    directory the publisher is run from, the same as Thumbnail above - not to
+	    this file's own folder.-->
+	<Screenshot Value="shots/1.png" />
+	<Screenshot Value="shots/2.png" />
+	<Screenshot Value="shots/3.png" />
+	<!--Tag, can be set multiple times-->
+	<Tag Value="Code Mod" />
+	<!--Link to the forum post where the mod can be discussed-->
+	<ForumLink Value="" />
+	<!--Version of the mod-->
+	<ModVersion Value="1.0.0" />
+	<!--Recommended version of the base game to use the mod-->
+	<GameVersion Value="1.6.*" />
+	<!--Dependency for the mod, can be set multiple times-->
+	<!--<Dependency Id="" />-->
+	<!--Required DLC, can be set multiple times. Supported values are "Landmark Buildings", "San Fransisco Set", "Beach Properties", "Urban Promenades", "Modern Architecture"-->
+	<!--<RequiredDLC Value="" />-->
+	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
+	<ChangeLog>
+Initial release.
+	</ChangeLog>
+	<!--External link, can be set multiple times. supported types are "discord", "github", "youtube", "twitch", "x", "paypal", "patreon", "buymeacoffee", "kofi", "crowdin", "gitlab", "gofundme"-->
+	<!--<ExternalLink Type="github" Url="" />-->
+	<!--Supported values Public, Private, Unlisted-->
+	<AccessLevel Value="Public" />
+</Publish>
