@@ -11,14 +11,27 @@ what is specific to this mod.
 1. Click the mod icon in the top-left. The icon swaps to its "on" art, the tool
    takes over the cursor, and the filter panel appears in the bottom-left corner.
    Drag its header to move it.
-2. Tick the asset categories the marquee is allowed to catch.
-3. Drag a box over the map. Everything the box currently covers is ringed **live**
-   as you drag, and the count updates with it; releasing commits that set.
+2. Pick a selection mode and tick the asset categories it is allowed to catch.
+3. Mark out the area. Everything currently covered is ringed **live** as you draw,
+   and the count updates with it; closing the shape commits that set.
 4. **Bulldoze** deletes the selection and empties it. **Clear** drops the
    selection without deleting anything.
 
-Right click backs out one step at a time: it cancels an in-progress drag, then
-clears a selection, then leaves the tool.
+Right click backs out one step at a time: it cancels a selection in progress, then
+clears a committed selection, then leaves the tool. Polygon is the exception — it
+takes its own input path, so there right click removes the last placed corner.
+
+The three modes are `SelectionMode` in C# and `MODES` in `src/mods/modes.ts`, two
+halves of one wire contract that have to be edited together:
+
+| Mode | Gesture | Closes when |
+|---|---|---|
+| Marquee | Drag a box, rotated to camera yaw | The button is released |
+| Polygon | Click each corner in turn, minimum three | The first corner is clicked again |
+| Freeform | Drag a freehand loop | The loop is closed back to its start |
+
+`MODES` order — marquee, polygon, freeform — is what decides button order, not the
+enum numbering, which is why `Polygon = 2` sits in the middle of the panel.
 
 ## Build order is not optional
 
@@ -549,6 +562,13 @@ compiled or shipped inside the mod — it is metadata the publisher reads:
 | `PublishConfiguration.xml` | The listing itself: name, descriptions, tags, versions, changelog, `ModId` |
 | `Thumbnail.png` | 512×512 listing image |
 | `PublishProfiles/*.pubxml` | The three Visual Studio publish profiles, one per publisher command |
+| `ThumbnailSource/` | The HTML the thumbnail is rendered from, plus recoloured **copies** of the icons — the art in `icon/` is never edited to suit a promo image |
+
+Listing screenshots live in `shots/` and are named in the config as
+`<Screenshot Value="shots/1.png" />`. Image paths in that file resolve against the
+directory the publisher runs from — the project root — not against
+`Properties/`, which is why the thumbnail is written `Properties/Thumbnail.png`
+rather than just `Thumbnail.png`.
 
 `<PublishConfigurationPath>` in the `.csproj` points at the XML. The publisher
 validates `DisplayName`, `ShortDescription`, `LongDescription`, `Thumbnail`,
@@ -556,6 +576,9 @@ validates `DisplayName`, `ShortDescription`, `LongDescription`, `Thumbnail`,
 error, not a warning.
 
 ### The release loop
+
+The mod is published — every release from here is `NewVersion` or `Update`,
+never `Publish`.
 
 Close Cities: Skylines II first — the game holds the deployed DLL open and the
 publisher cannot read a locked file. Then:
@@ -568,10 +591,11 @@ npm run build               # must come second; DeployWIP wipes the folder
 That deployed folder *is* the upload. Check it before publishing — the publisher
 sends the folder wholesale, so anything that lands there ships.
 
-Then run the publisher against that verified folder:
+Then run the publisher against that verified folder — `NewVersion` for a release
+that changes the built output, `Update` for one that does not:
 
 ```powershell
-& "$env:CSII_MODPUBLISHERPATH" Publish `
+& "$env:CSII_MODPUBLISHERPATH" NewVersion `
     'Properties\PublishConfiguration.xml' `
     -c "$env:CSII_LOCALMODSPATH\BulldozerMarquee" -v
 ```
@@ -581,9 +605,11 @@ credentials never belong in the config or on the command line.
 
 Three commands, and picking the wrong one is the easy mistake:
 
-- **`Publish`** — first listing only. Requires `ModId` to be empty or `0`, and
-  the publisher refuses if it is set. It prints the assigned ID on success; put
-  that in `<ModId Value="…" />` and never run `Publish` for this mod again.
+- **`Publish`** — first listing only, and **already done**: the mod is live as
+  Paradox Mods ID `157711`, which is why `<ModId>` is filled in. `Publish` now
+  refuses to run at all, because it requires `ModId` to be empty or `0`. That
+  guard is the only thing standing between a slip of the finger and a duplicate
+  listing, so leave the ID where it is.
 - **`NewVersion`** — every later release that changes the built output. Bump
   `<ModVersion>` and rewrite `<ChangeLog>` first, or the listing will claim the
   previous version's notes.

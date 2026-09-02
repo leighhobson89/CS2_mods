@@ -1,0 +1,95 @@
+<style>
+  html,body{margin:0;padding:0;width:512px;height:512px;overflow:hidden}
+  body{background:#0d1219}
+  .stage{position:relative;width:512px;height:512px;overflow:hidden}
+
+  /* ---- sky + skyline + ground ---------------------------------- */
+  .sky{position:absolute;inset:0;
+    background:linear-gradient(#2f4459 0%, #3d5670 38%, #6d7b7a 62%, #2a2f31 63%, #1a1e22 100%)}
+  .skyline{position:absolute;left:0;right:0;top:150px;height:210px}
+  .b{position:absolute;bottom:0;background:#18212c;
+     box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+  .b::after{content:"";position:absolute;inset:6px 5px auto 5px;height:60%;
+     background-image:radial-gradient(circle,rgba(255,214,120,.34) 1.1px,transparent 1.2px);
+     background-size:9px 12px}
+  .haze{position:absolute;left:0;right:0;top:150px;height:215px;
+     background:linear-gradient(rgba(35,45,58,.30) 0%, rgba(28,34,42,.55) 55%, #1d2228 100%)}
+
+  /* ---- ground plane selection ring ------------------------------ */
+  .ringwrap{position:absolute;left:50%;top:333px;transform:translate(-50%,-50%);
+    width:392px;height:392px;perspective:600px}
+  .ring{position:absolute;inset:0;border-radius:50%;
+    border:9px dashed #ffc93c;transform:rotateX(74deg);
+    box-shadow:0 0 46px rgba(255,181,44,.55), inset 0 0 46px rgba(255,181,44,.30);
+    background:radial-gradient(closest-side,rgba(255,184,44,.20),rgba(255,184,44,.05) 70%,transparent)}
+
+  /* ---- the machine ---------------------------------------------- */
+  .dozer{position:absolute;left:50%;top:296px;transform:translate(-50%,-50%);
+    width:268px;height:268px;
+    filter:drop-shadow(0 14px 16px rgba(0,0,0,.65)) drop-shadow(0 0 26px rgba(255,175,40,.35))}
+
+  /* ---- hazard bars ---------------------------------------------- */
+  .hz{position:absolute;height:19px;top:38px;border-radius:2px;
+    background:repeating-linear-gradient(115deg,#ffc93c 0 11px,#12161b 11px 22px);
+    box-shadow:0 2px 0 rgba(0,0,0,.55), inset 0 0 0 2px rgba(0,0,0,.55)}
+  .hz.l{left:22px;width:104px}
+  .hz.r{right:22px;width:104px}
+
+  /* ---- wordmark -------------------------------------------------- */
+  .title{position:absolute;left:0;right:0;top:22px;text-align:center;
+    font-family:"Arial Black","Segoe UI Black",Impact,sans-serif;
+    letter-spacing:2px;line-height:.92}
+  .t1{font-size:42px;color:#f2f6fa;
+    -webkit-text-stroke:7px #12161b;paint-order:stroke fill;
+    text-shadow:0 3px 0 #12161b, 0 5px 12px rgba(0,0,0,.7)}
+
+  /* Two stacked copies: the stroked one sits behind, so the gradient fill on top
+     is never thinned by its own outline (which is what -webkit-text-stroke does
+     when it shares a layer with background-clip:text). */
+  .t2{position:relative;display:inline-block;margin-top:10px;
+    font-size:73px;letter-spacing:0px}
+  .t2 .stroke{-webkit-text-stroke:12px #12161b;color:#12161b;
+    filter:drop-shadow(0 6px 0 #8a5208) drop-shadow(0 9px 11px rgba(0,0,0,.8))}
+  .t2 .fill{position:absolute;left:0;top:0;width:100%;
+    background:linear-gradient(#fff6d0 2%,#ffc93c 38%,#f59d12 68%,#d07d09 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+
+  /* ---- mode badges ---------------------------------------------- */
+  .modes{position:absolute;left:0;right:0;bottom:26px;
+    display:flex;justify-content:center;gap:18px}
+  .modes img{width:82px;height:82px;border-radius:17px;
+    box-shadow:0 0 0 3px #ffc93c, 0 7px 16px rgba(0,0,0,.75)}
+  .plate{position:absolute;left:0;right:0;bottom:0;height:150px;
+    background:linear-gradient(transparent,rgba(9,12,16,.86) 46%,#080b0f 100%)}
+</style>
+<div class="stage">
+  <div class="sky"></div>
+  <div class="skyline" id="sk"></div>
+  <div class="haze"></div>
+
+  <div class="ringwrap"><div class="ring"></div></div>
+  <img class="dozer" src="dozer.svg">
+
+  <div class="plate"></div>
+  <div class="hz l"></div><div class="hz r"></div>
+  <div class="title">
+    <span class="t1">BULLDOZER</span>
+    <span class="t2"><span class="stroke">MARQUEE</span><span class="fill">MARQUEE</span></span>
+  </div>
+
+  <div class="modes">
+    <img src="marquee.svg"><img src="polygonal.svg"><img src="freeform.svg">
+  </div>
+</div>
+<script>
+  // deterministic skyline so the render is reproducible
+  let s = 7, R = () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const sk = document.getElementById('sk');
+  let x = -14;
+  while (x < 526) {
+    const w = 24 + Math.round(R() * 34), h = 46 + Math.round(R() * 128);
+    sk.insertAdjacentHTML('beforeend',
+      `<div class="b" style="left:${x}px;width:${w}px;height:${h}px"></div>`);
+    x += w + 3 + Math.round(R() * 5);
+  }
+</script>

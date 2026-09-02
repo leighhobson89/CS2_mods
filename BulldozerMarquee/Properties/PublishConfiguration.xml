@@ -1,22 +1,30 @@
 ﻿<Publish>
 	<!--Id must be set in order to update existed mod. it is not required for publishing mod for the first time-->
-	<ModId Value="" />
+	<ModId Value="157711" />
 	<!--Name of the mod to display to players-->
 	<DisplayName Value="Bulldozer Marquee" />
 	<!--Short description of the mod-->
-	<ShortDescription Value="Drag a box over the map, keep only the asset types you ticked, delete them." />
+	<ShortDescription Value="Box, lasso or polygon select an area, keep only the asset types you ticked, bulldoze them in one go." />
 	<!--Long description of the mod. Single line or multi line. Supports minimal markdown subset-->
 	<LongDescription>
-Bulldozer Marquee adds a box-select bulldozer to Cities: Skylines II. Drag a rectangle over the map, and everything inside it that matches your chosen asset types is highlighted live as you drag. Release to commit the selection, then bulldoze the lot in one go.
+Bulldozer Marquee adds an area-select bulldozer to Cities: Skylines II. Mark out a region with a box, a lasso or a polygon, and everything inside it that matches your chosen asset types is highlighted live as you draw. Release to commit the selection, then bulldoze the lot in one go.
+
+## Three ways to select
+
+- **Marquee** — drag a box. It follows the camera's rotation, so it always lines up with what you see on screen.
+- **Polygon** — click out corners one at a time and click the first corner again to close the shape. Right click removes the last corner you placed, so a misplaced one costs a click rather than a restart. Needs at least three corners.
+- **Freeform** — draw a lasso freehand around whatever you want, and the loop closes itself back to the start.
+
+Switch between them with the three buttons on the panel. Polygon and lasso are what you want around a curved shoreline, a roundabout or an irregular block, where a rectangle would either miss part of it or catch things you meant to keep.
 
 ## How to use it
 
-1. Click the bulldozer icon in the top-left. The tool takes over the cursor and the filter panel appears in the bottom-left corner — drag its header to move it.
-2. Tick the asset categories the marquee is allowed to catch.
-3. Drag a box over the map. Everything the box covers is ringed as you drag, and the count updates with it.
+1. Click the bulldozer icon in the top-left. The tool takes over the cursor and the panel appears in the bottom-left corner — drag its header to move it.
+2. Pick a selection mode and tick the asset categories the selection is allowed to catch.
+3. Mark out the area. Everything caught is ringed as you draw, and the count updates with it.
 4. **Bulldoze** deletes the selection. **Clear** drops the selection without deleting anything.
 
-Right click backs out one step at a time: it cancels an in-progress drag, then clears a selection, then leaves the tool.
+Right click backs out one step at a time: it cancels a selection in progress, then clears a committed selection, then leaves the tool.
 
 ## Filters
 
@@ -32,12 +40,16 @@ All three are in Options &gt; Mods &gt; Bulldozer Marquee, and mirrored by check
 
 ## Notes
 
-The marquee is a real game tool, not a UI overlay, so it respects your own key bindings, cancels whichever tool was active when you start it, and closes on Escape like every vanilla tool. The selection rectangle is drawn as world geometry, so it drapes over terrain instead of floating flat above a hillside.
+The selector is a real game tool, not a UI overlay, so it respects your own key bindings, cancels whichever tool was active when you start it, and closes on Escape like every vanilla tool. Selection outlines are drawn as world geometry, so they drape over terrain instead of floating flat above a hillside.
 	</LongDescription>
 	<!--Thumbnail-->
 	<Thumbnail Value="Properties/Thumbnail.png" />
-	<!--Screenshot, can be set multiple times-->
-	<!--<Screenshot Value="Properties/Screenshots/01.png" />-->
+	<!--Screenshot, can be set multiple times. Paths are relative to the project
+	    directory the publisher is run from, the same as Thumbnail above - not to
+	    this file's own folder.-->
+	<Screenshot Value="shots/1.png" />
+	<Screenshot Value="shots/2.png" />
+	<Screenshot Value="shots/3.png" />
 	<!--Tag, can be set multiple times-->
 	<Tag Value="Code Mod" />
 	<!--Link to the forum post where the mod can be discussed-->
